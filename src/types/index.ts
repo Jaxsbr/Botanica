@@ -21,9 +21,6 @@ export interface CameraConfig {
     near: number;
     far: number;
     initialPosition: { x: number; y: number; z: number };
-    maxPanDistance: { x: number; y: number };  // Max pan from target
-    minZoomDistance: number;  // Closest zoom
-    maxZoomDistance: number;  // Farthest zoom
 }
 
 // Plant-related types (3D tree generation using ez-tree)

@@ -5,8 +5,6 @@ import type { CameraConfig } from '../types';
 export class CameraManager {
     public camera: THREE.PerspectiveCamera;
     public controls: OrbitControls;
-    private maxPanDistance: { x: number; y: number };
-    private initialTarget: THREE.Vector3;
 
     constructor(renderer: THREE.WebGLRenderer, config: CameraConfig) {
         // Create camera
@@ -23,25 +21,12 @@ export class CameraManager {
             config.initialPosition.z
         );
 
-        // Store pan limits
-        this.maxPanDistance = config.maxPanDistance;
-        this.initialTarget = new THREE.Vector3(0, 0.5, 0);
-
         // Create orbit controls
         this.controls = new OrbitControls(this.camera, renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
-
-        // Disable rotation, enable pan-only mode
-        this.controls.enableRotate = false;
-        this.controls.enablePan = true;
-        this.controls.screenSpacePanning = true;
-
-        // Set zoom limits
-        this.controls.minDistance = config.minZoomDistance;
-        this.controls.maxDistance = config.maxZoomDistance;
-
-        this.controls.target.copy(this.initialTarget);
+        this.controls.maxPolarAngle = Math.PI / 2; // Don't go below ground
+        this.controls.target.set(0, 0.5, 0); // Look at center of terrarium
         this.controls.update();
 
         // Handle window resize
@@ -55,14 +40,6 @@ export class CameraManager {
 
     public update(): void {
         this.controls.update();
-
-        // Clamp pan distance from initial target
-        const targetOffset = this.controls.target.clone().sub(this.initialTarget);
-
-        targetOffset.x = Math.max(-this.maxPanDistance.x, Math.min(this.maxPanDistance.x, targetOffset.x));
-        targetOffset.y = Math.max(-this.maxPanDistance.y, Math.min(this.maxPanDistance.y, targetOffset.y));
-
-        this.controls.target.copy(this.initialTarget).add(targetOffset);
     }
 
     public dispose(): void {

@@ -37,10 +37,7 @@ class Botanica {
             fov: 75,
             near: 0.1,
             far: 1000,
-            initialPosition: { x: 0, y: 2, z: 3 },
-            maxPanDistance: { x: 2, y: 2 },  // 2 units in each direction
-            minZoomDistance: 1,   // Can't get closer than 1 units
-            maxZoomDistance: 12   // Can't go farther than 12 units
+            initialPosition: { x: 0, y: 2, z: 3 }
         };
 
         // Initialize core systems
