@@ -1,9 +1,12 @@
 import './style.css';
+import * as THREE from 'three';
 import { SceneManager } from './scene/Scene';
 import { CameraManager } from './scene/Camera';
 import { LightingManager } from './scene/Lighting';
 import { GlassDome } from './terrarium/GlassDome';
 import { Soil } from './terrarium/Soil';
+import { Plant } from './plants/Plant';
+import { FERN_RULES, DEFAULT_PLANT_CONFIG } from './plants/presets';
 import type { TerrariumConfig, LightingConfig, CameraConfig } from './types';
 
 class Botanica {
@@ -14,6 +17,7 @@ class Botanica {
     private lightingManager: LightingManager;
     private glassDome: GlassDome;
     private soil: Soil;
+    private plants: Plant[];
 
     constructor() {
         // Configuration
@@ -53,10 +57,30 @@ class Botanica {
         this.glassDome = new GlassDome(terrariumConfig.radius);
         this.sceneManager.add(this.glassDome.getMesh());
 
+        // Create plants
+        this.plants = [];
+        this.addTestPlant();
+
         // Start animation loop
         this.animate();
 
         console.log('🌿 Botanica initialized!');
+    }
+
+    /**
+     * Add a test plant to the terrarium
+     */
+    private addTestPlant(): void {
+        const plant = new Plant(
+            new THREE.Vector3(0, 0, 0), // Position at origin
+            FERN_RULES,
+            DEFAULT_PLANT_CONFIG
+        );
+
+        this.sceneManager.add(plant.getMesh());
+        this.plants.push(plant);
+
+        console.log('🌱 Test fern planted at origin');
     }
 
     private animate = (): void => {
@@ -77,6 +101,7 @@ class Botanica {
         this.cameraManager.dispose();
         this.glassDome.dispose();
         this.soil.dispose();
+        this.plants.forEach(plant => plant.dispose());
     }
 }
 

@@ -8,9 +8,9 @@ Botanica is a **digital hobby** that lets you grow procedurally-generated plants
 
 This project explores creating something that matches the joy of real terrarium keeping: watching systems grow, optimizing ecosystems, and tinkering with long-term projects.
 
-## Current Status: Phase 1 - Development Setup ✅
+## Current Status: Phase 2 - Plants Growing! ✅
 
-The project has been set up with a proper TypeScript development environment and includes a 3D terrarium with glass dome container.
+The project now includes procedurally-generated plants using L-systems. A test fern grows in the terrarium!
 
 ### Getting Started
 
@@ -31,11 +31,14 @@ npm run build
 - ✅ Glass dome terrarium container
 - ✅ Soil bed with realistic materials
 - ✅ Professional lighting setup
+- ✅ **L-system plant generator** (NEW!)
+- ✅ **Procedurally-generated Fern** (NEW!)
 - ✅ Feature-based code architecture
 
 **Controls:**
 - Drag to rotate camera
 - Scroll to zoom in/out
+- Watch the fern growing from the center!
 
 **Prototype Available:**
 The original HTML prototype is available in `notes/prototype.html` and includes:
@@ -72,11 +75,16 @@ Apply rule 3 times → Complex plant structure emerges!
 - [x] Soil bed and lighting
 - [x] Orbit camera controls
 
-**Phase 2-5: Growth & Interaction**
-- [ ] L-system plant generation in TypeScript
-- [ ] Click soil to plant seeds
+**Phase 2: Plant Generation ✅**
+- [x] L-system string generator
+- [x] Turtle graphics geometry builder
+- [x] Plant entity class
+- [x] Fern preset renders in terrarium
+
+**Phase 3-5: Growth & Interaction**
 - [ ] Growth animation over time
 - [ ] Time controls (pause/speed up)
+- [ ] Click soil to plant seeds
 - [ ] Click plant to inspect details
 
 ### Week 2: Interaction
@@ -121,10 +129,11 @@ This isn't a game with objectives or scores. It's a **digital hobby** you check 
 **Project Structure:**
 ```
 src/
-├── scene/        # Scene, Camera, Lighting
-├── terrarium/    # GlassDome, Soil
-├── types/        # TypeScript definitions
-└── main.ts       # Application entry point
+├── scene/            # Scene, Camera, Lighting
+├── terrarium/        # GlassDome, Soil
+├── plants/           # L-system generator, geometry builder, presets
+├── types/            # TypeScript definitions
+└── main.ts           # Application entry point
 ```
 
 ## Development
@@ -149,5 +158,5 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Active Development | **Latest**: Phase 1 Complete - TypeScript Setup ✅  
+**Status**: Active Development | **Latest**: Phase 2 Complete - L-System Plants! 🌱  
 **Repository**: https://github.com/Jaxsbr/Botanica.git
