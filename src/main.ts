@@ -5,8 +5,7 @@ import { CameraManager } from './scene/Camera';
 import { LightingManager } from './scene/Lighting';
 import { GlassDome } from './terrarium/GlassDome';
 import { Soil } from './terrarium/Soil';
-import { Plant } from './plants/Plant';
-import { FERN_RULES, DEFAULT_PLANT_CONFIG } from './plants/presets';
+import { Plant3D } from './plants/Plant3D';
 import type { TerrariumConfig, LightingConfig, CameraConfig } from './types';
 
 class Botanica {
@@ -17,7 +16,8 @@ class Botanica {
     private lightingManager: LightingManager;
     private glassDome: GlassDome;
     private soil: Soil;
-    private plants: Plant[];
+    private plants: Plant3D[];
+    private elapsedTime: number;
 
     constructor() {
         // Configuration
@@ -62,7 +62,8 @@ class Botanica {
 
         // Create plants
         this.plants = [];
-        this.addTestPlant();
+        this.elapsedTime = 0;
+        this.addTestPlants();
 
         // Start animation loop
         this.animate();
@@ -71,23 +72,44 @@ class Botanica {
     }
 
     /**
-     * Add a test plant to the terrarium
+     * Add test plants to the terrarium
+     * Demonstrates different plant types using the new Plant3D system
      */
-    private addTestPlant(): void {
-        const plant = new Plant(
-            new THREE.Vector3(0, 0, 0), // Position at origin
-            FERN_RULES,
-            DEFAULT_PLANT_CONFIG
-        );
+    private addTestPlants(): void {
+        // Create a small fern at the center
+        const fern = Plant3D.createFern();
+        fern.getMesh().position.set(0, 0, 0);
+        this.sceneManager.add(fern.getMesh());
+        this.plants.push(fern);
 
-        this.sceneManager.add(plant.getMesh());
-        this.plants.push(plant);
+        console.log('🌱 3D fern planted at origin');
+        console.log('   Config:', fern.getConfig());
+        console.log('   Performance:', fern.getMetrics());
+        console.log('   Bounding box:', fern.getMesh().children[0]?.geometry?.boundingBox);
 
-        console.log('🌱 Test fern planted at origin');
+        // Uncomment to add more plants:
+
+        // Add a small bush to the left
+        // const bush = Plant3D.createBush({ size: 'small' });
+        // bush.getMesh().position.set(-0.8, 0, 0.3);
+        // this.sceneManager.add(bush.getMesh());
+        // this.plants.push(bush);
+
+        // Add a small tree to the right
+        // const tree = Plant3D.createTree({ size: 'small', trunkHeight: 5 });
+        // tree.getMesh().position.set(0.8, 0, -0.3);
+        // this.sceneManager.add(tree.getMesh());
+        // this.plants.push(tree);
     }
 
     private animate = (): void => {
         requestAnimationFrame(this.animate);
+
+        // Update elapsed time (for leaf swaying animation)
+        this.elapsedTime += 0.016; // Approximate delta time
+
+        // Update plants (for wind animation on leaves)
+        this.plants.forEach(plant => plant.update(this.elapsedTime));
 
         // Update controls
         this.cameraManager.update();
