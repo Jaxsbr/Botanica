@@ -15,7 +15,7 @@ export const POT_PRESETS: Record<string, PotConfig> = {
         size: 'small',
         topRadius: 0.3,
         bottomRadius: 0.22,
-        height: 0.55,
+        height: 1.0,
         thickness: 0.02, // 2cm thick walls
         color: 0xc55a3a, // Terracotta orange-brown
         rimHeight: 0.03,
