@@ -35,15 +35,19 @@ npm run build
 - ✅ **Leaf animation** - Wind/sway effects
 - ✅ Feature-based code architecture
 - ✅ **Phase 1.1 Complete** - Backyard scene with grass, pavers, and pot system
-`- ✅ **Podule System** - Navigation between game areas (Home, Shop) with smooth transitions
+- ✅ **Podule System** - Navigation between game areas (Home, Shop) with smooth transitions
 
 **Current Phase (1.2 - Core Economy):**
 - ✅ Podule navigation system (Home ↔ Shop)
 - ✅ Podule architecture (BasePodule, PoduleManager)
 - ✅ Icon-based navigation UI with transitions
-- ⏳ Money tracking system
-- ⏳ Shop UI for purchasing items
-- ⏳ Transaction system
+- ✅ **Interactive Plant Nursery Shop** - 3D environment with hotspots
+- ✅ **Hotspot System** - Click zones for product categories
+- ✅ **Shop UI Overlay** - Filtered item display by category
+- ✅ **Mock Item Catalog** - Tools, pots, fertilizers, soil products
+- ⏳ Money tracking system (economy integration)
+- ⏳ Functional purchases (economy integration)
+- ⏳ Inventory system (economy integration)
 
 **Upcoming Phases:**
 - ⏳ Phase 1.3 - Soil & Water (NPK, pH, drainage, watering)
@@ -51,6 +55,14 @@ npm run build
 - ⏳ Phase 1.5 - Harvest & Income (fruit collection, sales)
 - ⏳ Phase 1.6 - Side Activities (worm digging, composting)
 - ⏳ Phase 1.7 - Light & Polish (sun simulation, UI polish)
+
+## How to Play (Current Features)
+
+1. **Navigate Between Podules** - Use the bottom navigation bar to switch between Home (🏠) and Shop (🛒)
+2. **Explore the Plant Nursery** - Rotate camera to view the indoor building and outdoor plant displays
+3. **Click Hotspots** - Hover over glowing green zones to highlight them, click to browse that category
+4. **Browse Shop Items** - View tools, pots, fertilizers, and soil products with prices and descriptions
+5. **Mock Purchases** - Click "Buy" buttons to see purchase feedback (no economy integration yet)
 
 ## Core Concept
 
@@ -140,6 +152,9 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 - Creates a unique miniature world feel (snow globe aesthetic)
 - Navigate between podules with smooth transitions
 - Each podule has its own dome, contents, and purpose (Home, Shop, etc.)
+- **Individual podule sizing** - Each podule can have its own radius for optimal design
+  - Home: Cozy backyard (4.0 radius)
+  - Shop: Spacious nursery (8.0 radius)
 - Signature visual identity that sets Botanica apart
 
 **A Digital Hobby, Not a Game**
@@ -172,7 +187,8 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 src/
 ├── scene/            # Scene, Camera, Lighting
 ├── podules/          # Podule system (BasePodule, Manager, Home, Shop)
-├── ui/               # NavigationUI, TransitionOverlay
+├── ui/               # NavigationUI, TransitionOverlay, ShopCategoryUI
+├── shop/             # Hotspot system, ShopItems catalog, HotspotManager
 ├── environment/      # PoduleDome, GrassGround, Pavers
 ├── containers/       # Pot system for plants
 ├── plants/           # Plant3D system, genetics, presets

@@ -19,10 +19,11 @@ export class HomePodule extends BasePodule {
     private elapsedTime: number = 0;
 
     constructor(config: PoduleConfig) {
-        super('home', config);
+        // Home podule uses original smaller size (4.0 radius)
+        super('home', config, 4.0);
 
         // Create backyard environment inside dome
-        this.grassGround = new GrassGround(config.radius);
+        this.grassGround = new GrassGround(this.radius);
         this.group.add(this.grassGround.getMesh());
 
         this.pavers = new Pavers(9, 0.8, 0.1);

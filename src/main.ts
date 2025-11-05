@@ -23,7 +23,7 @@ class Botanica {
     constructor() {
         // Configuration
         const poduleConfig: PoduleConfig = {
-            radius: 4.0,
+            radius: 4.0, // Base size - individual podules can override
             soilColor: 0x654321,
             backgroundColor: 0xf0f0f0
         };
@@ -38,7 +38,7 @@ class Botanica {
             fov: 75,
             near: 0.1,
             far: 1000,
-            initialPosition: { x: 0, y: 2, z: 3 }
+            initialPosition: { x: 0, y: 4, z: 6 } // Good view for both podule sizes
         };
 
         // Initialize core systems
@@ -56,7 +56,7 @@ class Botanica {
 
         // Create podules
         const homePodule = new HomePodule(poduleConfig);
-        const shopPodule = new ShopPodule(poduleConfig);
+        const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera);
 
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);

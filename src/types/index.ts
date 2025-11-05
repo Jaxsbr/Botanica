@@ -89,3 +89,17 @@ export interface PlantGenetics extends Required<Omit<Plant3DConfig, 'color'>> {
     };
 }
 
+// Shop system types
+
+export type ShopCategory = 'tools' | 'pots' | 'fertilizers' | 'soil' | 'outdoor-plants' | 'indoor-plants';
+
+export interface ShopItem {
+    id: string;
+    name: string;
+    price: number;
+    category: ShopCategory;
+    description: string;
+    icon: string; // emoji or simple indicator
+    unlocked: boolean; // For future unlock system
+}
+

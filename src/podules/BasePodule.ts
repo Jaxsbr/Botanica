@@ -14,13 +14,15 @@ export abstract class BasePodule {
     public readonly group: THREE.Group;
     protected dome: PoduleDome;
     protected config: PoduleConfig;
+    protected radius: number;
     private _isActive: boolean = false;
 
-    constructor(type: PoduleType, config: PoduleConfig) {
+    constructor(type: PoduleType, config: PoduleConfig, radiusOverride?: number) {
         this.type = type;
         this.config = config;
+        this.radius = radiusOverride ?? config.radius;
         this.group = new THREE.Group();
-        this.dome = new PoduleDome(config.radius);
+        this.dome = new PoduleDome(this.radius);
         this.group.add(this.dome.getMesh());
     }
 
