@@ -35,15 +35,17 @@ npm run build
 - ✅ **Leaf animation** - Wind/sway effects
 - ✅ Feature-based code architecture
 - ✅ **Phase 1.1 Complete** - Backyard scene with grass, pavers, and pot system
+`- ✅ **Podule System** - Navigation between game areas (Home, Shop) with smooth transitions
 
-**Current Phase (1.1 - Foundation & Scene):**
-- ✅ Transform terrarium contents to backyard scene (inside dome)
-- ✅ Glass dome as "snow globe" framing device
-- ✅ Grass ground plane and paver tiles
-- ✅ Pot container system
+**Current Phase (1.2 - Core Economy):**
+- ✅ Podule navigation system (Home ↔ Shop)
+- ✅ Podule architecture (BasePodule, PoduleManager)
+- ✅ Icon-based navigation UI with transitions
+- ⏳ Money tracking system
+- ⏳ Shop UI for purchasing items
+- ⏳ Transaction system
 
 **Upcoming Phases:**
-- ⏳ Phase 1.2 - Core Economy (money, shop, transactions)
 - ⏳ Phase 1.3 - Soil & Water (NPK, pH, drainage, watering)
 - ⏳ Phase 1.4 - Plant Growth (lifecycle stages, time controls)
 - ⏳ Phase 1.5 - Harvest & Income (fruit collection, sales)
@@ -52,7 +54,7 @@ npm run build
 
 ## Core Concept
 
-You start with a single potted avocado plant (a gift from your grandmother) in a small backyard contained within a glass dome. Like a living snow globe, each environment is framed by transparent glass, giving the game a unique miniature diorama aesthetic. Your goal: build a thriving garden operation by:
+You start with a single potted avocado plant (a gift from your grandmother) in a small backyard contained within a glass dome. Each game area exists in its own **podule** - a self-contained environment inside a glass dome, creating a unique miniature diorama aesthetic. Navigate between podules (Home, Shop, etc.) to manage your garden operation. Your goal: build a thriving garden by:
 
 - Managing soil nutrients (NPK ratios, pH, drainage)
 - Controlling light exposure and watering
@@ -134,9 +136,10 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 ## Design Philosophy
 
 **Living Diorama Aesthetic**
-- All environments contained in glass domes (snow globe style)
-- Creates a unique miniature world feel
-- Dome stays constant, contents change (backyard, indoor, greenhouse)
+- All game areas exist as "podules" - self-contained environments in glass domes
+- Creates a unique miniature world feel (snow globe aesthetic)
+- Navigate between podules with smooth transitions
+- Each podule has its own dome, contents, and purpose (Home, Shop, etc.)
 - Signature visual identity that sets Botanica apart
 
 **A Digital Hobby, Not a Game**
@@ -168,7 +171,9 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 ```
 src/
 ├── scene/            # Scene, Camera, Lighting
-├── environment/      # GlassDome, GrassGround, Pavers
+├── podules/          # Podule system (BasePodule, Manager, Home, Shop)
+├── ui/               # NavigationUI, TransitionOverlay
+├── environment/      # PoduleDome, GrassGround, Pavers
 ├── containers/       # Pot system for plants
 ├── plants/           # Plant3D system, genetics, presets
 ├── types/            # TypeScript definitions
@@ -211,6 +216,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Phase 1.1 Complete ✅ | **Latest**: Backyard scene with grass, pavers, and pot system implemented | **Next**: Phase 1.2 - Core Economy 🚀  
+**Status**: Phase 1.2 In Progress 🚧 | **Latest**: Podule navigation system implemented | **Next**: Money tracking & shop UI 🚀  
 **Repository**: https://github.com/Jaxsbr/Botanica.git  
 **Documentation**: See `/docs` directory for complete specifications

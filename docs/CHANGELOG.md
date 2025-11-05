@@ -1,5 +1,138 @@
 # Botanica - Documentation Changelog
 
+## Version 1.2 - Podule System Implementation (November 5, 2025)
+
+### Overview
+Complete implementation of the **podule system** - the core architectural pattern for organizing game areas. The "podule" concept replaces loose references to "glass domes" and "scenes" with a unified, performance-optimized navigation system.
+
+### What is a Podule?
+A **podule** is a self-contained game area within a glass dome (Home, Shop, Indoor, Greenhouse, etc.). Each podule:
+- Lives inside its own glass dome (snow globe aesthetic)
+- Manages its own Three.js objects and logic
+- Only updates when active (performance optimization)
+- Can be navigated to via bottom navigation UI
+
+### Implementation Completed ✅
+
+#### 1. Core Architecture
+**Files Created:**
+- `src/podules/BasePodule.ts` - Abstract base class with lifecycle methods
+- `src/podules/PoduleManager.ts` - Manages switching and updates
+- `src/podules/HomePodule.ts` - Main garden/backyard area
+- `src/podules/ShopPodule.ts` - Shopping area (placeholder for Phase 1.2 economy)
+
+**Files Refactored:**
+- `src/environment/GlassDome.ts` → `src/environment/PoduleDome.ts` (renamed)
+- `src/types/index.ts` - Added `PoduleType`, `PoduleConfig` types
+- `src/scene/Scene.ts` - Updated to use `PoduleConfig`
+- `src/main.ts` - Completely refactored to use PoduleManager
+
+#### 2. Navigation UI
+**Files Created:**
+- `src/ui/NavigationUI.ts` - Bottom navigation bar with icon buttons
+- `src/ui/TransitionOverlay.ts` - Fade transitions between podules
+- `src/style.css` - Navigation bar and transition styles
+
+**Features:**
+- Icon-based navigation (🏠 Home | 🛒 Shop)
+- Active podule highlighted with green glow
+- Smooth hover effects and transitions
+- Modern glass-morphic design with backdrop blur
+
+#### 3. Transition System
+- Fullscreen black fade overlay
+- 300ms transition duration
+- Smooth `fadeOut()` → `switchPodule()` → `fadeIn()` sequence
+- Only active podule renders (performance optimized)
+
+### Technical Benefits
+
+**Performance:**
+- Only one podule's objects in scene at a time
+- Inactive podules don't render (removed from scene graph)
+- Inactive podules don't update (no CPU cycles)
+- Memory efficient - podules stay loaded but inactive
+
+**Architecture:**
+- Clean separation of concerns (each podule self-contained)
+- Easy extensibility (extend `BasePodule` for new areas)
+- Consistent lifecycle pattern (activate, deactivate, update, dispose)
+- Type-safe podule management
+
+**User Experience:**
+- Smooth navigation between game areas
+- Clear visual feedback for active area
+- Professional transitions
+- Consistent "living diorama" aesthetic
+
+### Documentation Updates
+
+#### GAME_DESIGN.md
+- Updated "The Scene" section with podule concept
+- Added "Podule Navigation" section to UI/Controls
+- Updated Phase 2 features with "Additional Podules"
+- Replaced references to "glass dome framing" with "podule system"
+
+#### TECHNICAL_NOTES.md
+- Added comprehensive "Podule System Architecture" section
+- Documented BasePodule, PoduleManager implementation details
+- Added code examples for creating new podules
+- Updated implementation status (Scene Setup now complete)
+- Updated file structure to reflect new directories
+- Marked podule system as "FULLY IMPLEMENTED ✅"
+
+#### README.md
+- Updated core concept with podule explanation
+- Added podule system to implemented features list
+- Updated current phase (1.2 - Core Economy in progress)
+- Updated project structure with podules/ and ui/ directories
+- Updated design philosophy with podule navigation details
+- Updated status line to reflect latest progress
+
+### Directory Structure Changes
+
+**New Directories:**
+```
+src/
+├── podules/          # NEW - Podule system
+│   ├── BasePodule.ts
+│   ├── PoduleManager.ts
+│   ├── HomePodule.ts
+│   └── ShopPodule.ts
+├── ui/               # NEW - UI components
+│   ├── NavigationUI.ts
+│   └── TransitionOverlay.ts
+```
+
+**Renamed:**
+```
+src/environment/GlassDome.ts → src/environment/PoduleDome.ts
+```
+
+### Breaking Changes
+- `GlassDome` class renamed to `PoduleDome`
+- `TerrariumConfig` type renamed to `PoduleConfig` (alias maintained for compatibility)
+- `main.ts` completely restructured (no longer directly manages scene objects)
+
+### Phase 1.2 Status
+- ✅ Podule navigation system (Home ↔ Shop)
+- ✅ Podule architecture complete
+- ✅ Icon-based navigation UI with transitions
+- ⏳ Money tracking system (next)
+- ⏳ Shop UI for purchasing items (next)
+- ⏳ Transaction system (next)
+
+### Next Steps
+With the podule system in place, Phase 1.2 can continue with:
+1. Economy system (money tracking)
+2. Shop UI overlay in ShopPodule
+3. Transaction system for buying items
+4. Basic inventory management
+
+The podule architecture makes it trivial to add new game areas in the future by extending `BasePodule`.
+
+---
+
 ## Version 1.1 - MVP Refinements (November 5, 2025)
 
 ### Overview

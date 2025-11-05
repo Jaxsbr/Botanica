@@ -4,11 +4,17 @@
 
 import * as THREE from 'three';
 
-export interface TerrariumConfig {
+// Podule system types
+export type PoduleType = 'home' | 'shop';
+
+export interface PoduleConfig {
     radius: number;
     soilColor: number;
     backgroundColor: number;
 }
+
+// Legacy alias for backwards compatibility during refactor
+export type TerrariumConfig = PoduleConfig;
 
 export interface LightingConfig {
     ambientIntensity: number;

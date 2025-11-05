@@ -31,14 +31,14 @@ Your grandmother gives you:
 - $10 starting money (enough for 1-2 emergency purchases while learning)
 
 ### The Scene
-The camera looks at a miniature backyard contained within a transparent glass dome (like a snow globe):
+The camera looks at a miniature backyard contained within a **podule** - a self-contained environment inside a transparent glass dome (like a snow globe):
 - Grass surrounding a paved area inside the dome
 - Your single potted avocado plant on the pavers
 - Empty pots stacked nearby
 - A compost bin in the corner
 - Natural sunlight filtering through the glass dome
 
-**Design Note:** All environments (backyard, indoor, greenhouse) use the glass dome framing device. This creates a consistent "living diorama" aesthetic - each scene is a self-contained miniature world. Future environments will simply change the contents inside the dome while maintaining this signature visual style.
+**Design Note - The Podule System:** All game areas (Home, Shop, Indoor, Greenhouse) exist as separate "podules" - self-contained environments within glass domes. This creates a consistent "living diorama" aesthetic where each podule is a miniature world. Players navigate between podules via a bottom navigation UI, with smooth fade transitions. The dome framing is the signature visual that unifies all game areas.
 
 ### Your First Goals
 1. **Harvest the ripe fruit** - Immediate decision: Sell for cash or plant seeds?
@@ -458,11 +458,17 @@ Maintain soil health
 ## User Interface Design
 
 ### Main View
-- 3D view of glass dome containing the environment
-- Camera can orbit and zoom around the dome
-- Click directly on objects inside the dome to interact
+- 3D view of the current podule (glass dome containing the environment)
+- Camera can orbit and zoom around the podule
+- Click directly on objects inside the podule to interact
 - Minimal UI overlays (time controls, money counter)
-- Glass dome provides consistent framing across all environments (backyard, indoor, etc.)
+- Bottom navigation bar for switching between podules (Home 🏠, Shop 🛒, etc.)
+
+**Podule Navigation:**
+- Icon-based buttons at bottom center
+- Active podule highlighted with green glow
+- Smooth black fade transition when switching podules
+- Only active podule renders and updates (performance optimized)
 
 ### Plant Inspection Panel
 Click plant → Side panel slides in:
@@ -577,15 +583,15 @@ Players should be able to assess plant health at a glance:
 
 ## Phase 2 Features (Future Expansion)
 
-**Note:** All Phase 2 environments will maintain the glass dome framing. Indoor scenes will show furniture, shelves, and grow lights *inside* the dome. Greenhouses will have transparent walls *inside* the dome. The dome is the signature visual that unifies all environments.
+**Note:** All Phase 2 podules will maintain the glass dome framing. Indoor podules will show furniture, shelves, and grow lights *inside* the dome. Greenhouse podules will have transparent walls *inside* the dome. The podule system (dome + navigation) is the signature visual/interaction pattern that unifies the entire game.
 
 ### Deferred Systems
 1. **Breeding/Genetics** - Cross-pollinate plants for hybrid traits
-2. **Indoor vs Outdoor** - Switch dome contents between backyard/indoor/greenhouse scenes
+2. **Additional Podules** - Indoor, Greenhouse, Storage, Lab podules (each with unique purposes)
 3. **Pest System** - Aphids appear, need organic/chemical pest control
 4. **Advanced Training** - Wire training, weights, bonsai techniques
 5. **Propagation Station** - Dedicated cutting area with humidity control
-6. **Multiple Domes** - Expand to several growing areas
+6. **Multiple Home Podules** - Expand to several growing areas for larger operations
 7. **Weather System** - Rain, heat waves, seasons affect outdoor plants
 8. **Disease** - Root rot, fungal infections requiring treatment
 9. **Soil Organisms** - Beneficial bacteria, mycorrhizae for boost

@@ -49,23 +49,28 @@ Professional Three.js scene setup with proper architecture.
 - Clean separation of concerns
 - Proper disposal patterns
 
-#### 3. Glass Dome Container (IMPLEMENTED - KEEPING AS SIGNATURE AESTHETIC)
-**Location:** `src/terrarium/`
+#### 3. Podule System (FULLY IMPLEMENTED ✅)
+**Location:** `src/podules/`, `src/ui/`, `src/environment/`
 
-The glass dome "snow globe" aesthetic is now a core design element for ALL environments.
+The **podule system** is the core architectural pattern for organizing game areas. Each podule is a self-contained environment within a glass dome, creating a "living diorama" aesthetic.
 
 **What Exists:**
-- `GlassDome.ts` - Transparent sphere geometry ✅ KEEPING
-- `Soil.ts` - Circular soil plane (base for environments)
+- `PoduleDome.ts` - Transparent sphere geometry (renamed from GlassDome) ✅
+- `BasePodule.ts` - Abstract base class for all podules ✅
+- `PoduleManager.ts` - Manages switching between podules ✅
+- `HomePodule.ts` - Main garden/backyard area ✅
+- `ShopPodule.ts` - Shopping area (placeholder for economy) ✅
+- `NavigationUI.ts` - Bottom navigation bar with icon buttons ✅
+- `TransitionOverlay.ts` - Fade transitions between podules ✅
 
-**What Needs to Change:**
-- Rename/refactor `Soil.ts` to be environment-specific base (BackyardGround, IndoorFloor, etc.)
-- Add grass/ground plane inside dome for backyard
-- Add paver tiles for plant placement area
-- Add pot container objects
-- Future: Different dome contents for indoor, greenhouse, etc.
+**How It Works:**
+- Each podule extends `BasePodule` and manages its own Three.js `Group`
+- `PoduleManager` handles adding/removing podule groups from scene
+- Only the active podule receives updates (performance optimized)
+- Navigation UI allows switching between podules (Home 🏠, Shop 🛒)
+- Smooth black fade transitions when switching
 
-**Design Philosophy:** Each environment (backyard, indoor, greenhouse) will be contained within the glass dome. The dome stays constant, the contents change. This creates a unique "living diorama" aesthetic.
+**Design Philosophy:** Each game area (Home, Shop, Indoor, Greenhouse, etc.) exists as a separate podule. The glass dome framing stays constant, but contents and functionality change per podule. This creates a unique "living diorama" aesthetic and clear separation of concerns.
 
 #### 4. Development Environment (WORKING)
 - Vite + TypeScript setup
@@ -372,14 +377,104 @@ class BotanicaGame {
 - Add fruit production
 
 #### 3. Scene Setup
-**Current:** Glass dome terrarium ✅ KEEPING
+**Status:** ✅ COMPLETED - Podule system implemented
 
-**Needs:** Transform dome contents to backyard
-- Ground plane with grass texture inside dome
-- Paved area for pots
-- Lighting that works through glass dome
+**Implemented:**
+- Ground plane with grass texture inside podule ✅
+- Paved area for pots ✅
+- Pot container system ✅
+- Podule navigation between Home and Shop ✅
+- Professional lighting setup ✅
+
+**Still Needed:**
 - Compost bin model/geometry
-- Sky/background visible through transparent dome
+- More detailed environment props
+
+## Podule System Architecture
+
+### Overview
+The podule system is the core architectural pattern for organizing game areas. It provides:
+- **Performance optimization** - Only active podule updates and renders
+- **Clean separation** - Each podule manages its own scene objects and logic
+- **Extensibility** - Easy to add new game areas by extending BasePodule
+- **Smooth UX** - Navigation with fade transitions between podules
+
+### Technical Implementation
+
+#### BasePodule (Abstract Class)
+```typescript
+// Location: src/podules/BasePodule.ts
+abstract class BasePodule {
+  type: PoduleType;              // 'home' | 'shop' | etc.
+  group: THREE.Group;            // Contains all scene objects
+  dome: PoduleDome;              // Glass dome visual
+  isActive: boolean;             // Current activation state
+  
+  abstract update(deltaTime: number): void;
+  abstract onActivate(): void;
+  abstract onDeactivate(): void;
+  abstract onDispose(): void;
+}
+```
+
+#### PoduleManager
+```typescript
+// Location: src/podules/PoduleManager.ts
+class PoduleManager {
+  addPodule(podule: BasePodule): void;
+  switchToPodule(type: PoduleType): void;
+  update(deltaTime: number): void;  // Only updates active podule
+  
+  // Handles:
+  // - Removing inactive podule's group from scene
+  // - Adding new podule's group to scene
+  // - Triggering lifecycle methods (activate/deactivate)
+}
+```
+
+#### Creating New Podules
+To add a new game area:
+1. Extend `BasePodule`
+2. Build scene contents in constructor (add to `this.group`)
+3. Implement `update()` for animations/logic
+4. Implement lifecycle methods (`onActivate`, `onDeactivate`, `onDispose`)
+5. Register with `PoduleManager` in main.ts
+
+Example:
+```typescript
+class GreenhousePodule extends BasePodule {
+  constructor(config: PoduleConfig) {
+    super('greenhouse', config);
+    // Add sprinklers, grow lights, etc. to this.group
+  }
+  
+  update(deltaTime: number): void {
+    // Update sprinkler animations, light cycles
+  }
+  
+  protected onActivate(): void {
+    // Resume greenhouse systems
+  }
+}
+```
+
+### Navigation System
+
+**NavigationUI** (`src/ui/NavigationUI.ts`)
+- Creates bottom navigation bar with icon buttons
+- Highlights active podule
+- Triggers podule switch on click
+
+**TransitionOverlay** (`src/ui/TransitionOverlay.ts`)
+- Fullscreen black fade overlay
+- `fadeOut()` → `switchPodule()` → `fadeIn()` sequence
+- 300ms transition duration
+
+### Performance Benefits
+- Only one podule's objects exist in the scene at a time
+- Inactive podules don't render (not in scene graph)
+- Inactive podules don't update (no CPU cycles)
+- Memory efficient - podules stay loaded but inactive
 
 ## Architecture Recommendations
 
@@ -442,9 +537,12 @@ src/
 │   ├── Shop.tsx             # Shop modal
 │   ├── HUD.tsx              # Time, money display
 │   └── Notifications.tsx    # Toast messages
-├── scene/                   # Existing
-├── terrarium/               # To be refactored
-├── plants/                  # Existing Plant3D
+├── scene/                   # Existing - Scene, Camera, Lighting
+├── podules/                 # ✅ NEW - Podule system (BasePodule, Manager, Home, Shop)
+├── ui/                      # ✅ NEW - NavigationUI, TransitionOverlay
+├── environment/             # ✅ REFACTORED - PoduleDome, GrassGround, Pavers
+├── containers/              # Existing - Pot system
+├── plants/                  # Existing - Plant3D
 ├── types/                   # Existing + extensions
 └── main.ts                  # Entry point
 ```
@@ -792,15 +890,15 @@ class PruningFeedbackUI {
 - Type definitions in `src/types/`
 - Build configuration (Vite setup works well)
 
-### What to Keep/Refactor
-- `src/terrarium/GlassDome.ts` - ✅ KEEPING - Core visual signature
-- `src/terrarium/Soil.ts` - REFACTOR to environment-specific bases
-- Current `main.ts` - Expand with full game structure
+### Completed Refactoring ✅
+- ✅ `src/terrarium/GlassDome.ts` → `src/environment/PoduleDome.ts` - RENAMED & DOCUMENTED
+- ✅ `terrarium/` → `environment/` - Directory restructured with grass, pavers, dome
+- ✅ `main.ts` - Refactored to use PoduleManager architecture
+- ✅ Created podule system architecture with navigation and transitions
 
-### What to Rename/Refactor
-- `terrarium/` → `environment/` (but keep dome, just expand contents)
-- `Soil.ts` → Create environment-specific classes (BackyardGround, IndoorFloor, etc.)
-- Add `_deprecated/` folder for old L-system code if still present
+### Future Refactoring
+- Create environment-specific base classes as needed (IndoorFloor, GreenhouseGround, etc.)
+- Expand podule types (Indoor, Greenhouse, Storage, Lab)
 
 ## Documentation to Create
 

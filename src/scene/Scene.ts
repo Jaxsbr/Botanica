@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import type { TerrariumConfig } from '../types';
+import type { PoduleConfig } from '../types';
 
 export class SceneManager {
     public scene: THREE.Scene;
     public renderer: THREE.WebGLRenderer;
-    private config: TerrariumConfig;
+    private config: PoduleConfig;
 
-    constructor(container: HTMLElement, config: TerrariumConfig) {
+    constructor(container: HTMLElement, config: PoduleConfig) {
         this.config = config;
 
         // Create scene
