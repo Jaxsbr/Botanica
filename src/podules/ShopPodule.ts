@@ -32,6 +32,13 @@ export class ShopPodule extends BasePodule {
         // Wire up hotspot clicks to show shop UI
         this.hotspotManager.onClick((category) => {
             this.shopUI.show(category);
+            // Disable hotspots while overlay is open to prevent click-through
+            this.hotspotManager.setEnabled(false);
+        });
+
+        // Re-enable hotspots when shop UI closes
+        this.shopUI.onClose(() => {
+            this.hotspotManager.setEnabled(true);
         });
 
         // Create ground plane

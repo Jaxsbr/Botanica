@@ -15,6 +15,8 @@ export class HotspotManager {
     private camera: THREE.Camera;
     private currentHovered: ShopHotspot | null = null;
     private clickCallback?: (category: ShopCategory) => void;
+    private mouseDownPos: { x: number; y: number } | null = null;
+    private enabled: boolean = true;
 
     constructor(camera: THREE.Camera) {
         this.camera = camera;
@@ -30,6 +32,11 @@ export class HotspotManager {
      */
     public addHotspot(hotspot: ShopHotspot): void {
         this.hotspots.push(hotspot);
+
+        // If callback is already set, apply it to this new hotspot
+        if (this.clickCallback) {
+            hotspot.onClick(this.clickCallback);
+        }
     }
 
     /**
@@ -51,6 +58,21 @@ export class HotspotManager {
     }
 
     /**
+     * Enable or disable hotspot interaction
+     * (Used to prevent clicking through shop overlay)
+     */
+    public setEnabled(enabled: boolean): void {
+        this.enabled = enabled;
+
+        // Clear hover state when disabling
+        if (!enabled && this.currentHovered) {
+            this.currentHovered.onHoverExit();
+            this.currentHovered = null;
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    /**
      * Set up mouse event listeners
      */
     private setupEventListeners(): void {
@@ -61,22 +83,42 @@ export class HotspotManager {
             this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             this.updateHover();
-        });
 
-        // Click detection
-        window.addEventListener('click', () => {
-            if (this.currentHovered) {
-                this.currentHovered.handleClick();
-            }
-        });
-
-        // Change cursor on hover
-        window.addEventListener('mousemove', () => {
+            // Change cursor on hover
             if (this.currentHovered) {
                 document.body.style.cursor = 'pointer';
             } else {
                 document.body.style.cursor = 'default';
             }
+        });
+
+        // Track mouse down position to differentiate click from drag
+        window.addEventListener('mousedown', (event) => {
+            this.mouseDownPos = { x: event.clientX, y: event.clientY };
+        });
+
+        // Only trigger click if mouse hasn't moved much (not a drag)
+        window.addEventListener('mouseup', (event) => {
+            if (!this.mouseDownPos) return;
+
+            // Skip if disabled
+            if (!this.enabled) {
+                this.mouseDownPos = null;
+                return;
+            }
+
+            // Calculate distance moved
+            const dx = event.clientX - this.mouseDownPos.x;
+            const dy = event.clientY - this.mouseDownPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // If moved less than 5 pixels, treat as click (not drag)
+            if (distance < 5 && this.currentHovered) {
+                console.log('🔥 Hotspot clicked:', this.currentHovered.category);
+                this.currentHovered.handleClick();
+            }
+
+            this.mouseDownPos = null;
         });
     }
 
@@ -84,6 +126,11 @@ export class HotspotManager {
      * Update hover state based on raycasting
      */
     private updateHover(): void {
+        // Skip if disabled
+        if (!this.enabled) {
+            return;
+        }
+
         // Update raycaster
         this.raycaster.setFromCamera(this.mouse, this.camera);
 

@@ -11,6 +11,7 @@ export class ShopCategoryUI {
     private container: HTMLDivElement;
     private isVisible: boolean = false;
     private currentCategory: ShopCategory | null = null;
+    private closeCallback?: () => void;
 
     constructor() {
         this.container = this.createContainer();
@@ -31,11 +32,13 @@ export class ShopCategoryUI {
      * Show the shop UI for a specific category
      */
     public show(category: ShopCategory): void {
+        console.log('📂 Opening shop UI for:', category);
         this.currentCategory = category;
         this.isVisible = true;
 
         // Get items for this category
         const items = getUnlockedItemsByCategory(category);
+        console.log('🛍️ Items to display:', items.length);
 
         // Build the UI
         this.container.innerHTML = '';
@@ -60,6 +63,18 @@ export class ShopCategoryUI {
         setTimeout(() => {
             this.container.style.display = 'none';
         }, 300);
+
+        // Trigger close callback
+        if (this.closeCallback) {
+            this.closeCallback();
+        }
+    }
+
+    /**
+     * Set callback for when UI is closed
+     */
+    public onClose(callback: () => void): void {
+        this.closeCallback = callback;
     }
 
     /**
