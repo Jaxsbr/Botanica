@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 
-export class Soil {
+export class GrassGround {
     public mesh: THREE.Mesh;
 
-    constructor(radius: number = 1.5, color: number = 0x654321) {
+    constructor(radius: number = 10.0) {
         // Create circular ground geometry
-        const geometry = new THREE.CircleGeometry(radius, 32);
+        const geometry = new THREE.CircleGeometry(radius, 64);
         geometry.rotateX(-Math.PI / 2); // Lay flat on ground
 
-        // Create soil material
+        // Create grass material with vibrant green color
         const material = new THREE.MeshStandardMaterial({
-            color: color,
-            roughness: 0.9,
+            color: 0x4a8f3a, // Vibrant grass green
+            roughness: 0.85,
             metalness: 0
         });
 

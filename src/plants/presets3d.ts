@@ -6,29 +6,29 @@
 import type { Plant3DConfig } from '../types';
 
 /**
- * Fern preset: Short, bushy plant with dense branching and many small leaves
+ * Fern preset: Young potted plant with thin stem and few leaves
  * Characteristics:
- * - Low height but visible scale
- * - High branch density for full appearance
- * - Many small leaves
- * - Slightly upward growth
+ * - Thin, visible stem
+ * - Very few leaves on simple branches
+ * - Young plant appearance
+ * - Minimal structure
  */
 export const FERN_PRESET: Plant3DConfig = {
     seed: 12345,
     treeType: 'deciduous',
     size: 'small',
-    trunkHeight: 4, // Increased from 1.5 for better visibility
-    branchDensity: 0.85, // Dense branching
-    leafDensity: 0.9, // Lots of leaves
-    leafSize: 0.12, // Increased for visibility (becomes 1.2 units in ez-tree)
+    trunkHeight: 1.2, // Tall thin stem clearly visible above pot
+    branchDensity: 0.15, // Very sparse branching - just a few branches
+    leafDensity: 0.1, // Minimal leaves - young plant
+    leafSize: 0.1, // Slightly larger leaves to be visible with fewer count
     barkType: 'willow',
     leafType: 'ash',
     color: {
-        bark: 0x6B8E23, // Olive green bark
-        leaves: 0x228B22, // Forest green leaves
+        bark: 0x7A5C3E, // Brown stem (visible trunk)
+        leaves: 0x4CBB17, // Bright green leaves
     },
-    growthDirection: 0.1, // Slight upward growth
-    branchLevels: 3, // Reduced from 4 for better performance and cleaner look
+    growthDirection: 0.8, // Strong upward growth for straight trunk
+    branchLevels: 1, // Single level - just trunk and simple branches
 };
 
 /**

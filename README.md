@@ -1,16 +1,16 @@
 # 🌿 Botanica
 
-A digital terrarium ecosystem simulator - not a game to beat, but a living system to tend and observe.
+A semi-realistic gardening simulation with economic progression - tend plants through their full lifecycle, manage soil chemistry, and build your garden operation from a single avocado plant into a thriving botanical business.
 
 ## About
 
-Botanica is a **digital hobby** that lets you grow procedurally-generated plants in a virtual terrarium. Watch them grow, prune their branches, breed hybrids, and build your botanical collection.
+Botanica is a **digital hobby** that combines deep horticultural systems with accessible gameplay. Players manage real gardening concepts (NPK nutrients, pH levels, light exposure, pruning) in gamified form, earning money through plant sales and side activities to expand their operation.
 
-This project explores creating something that matches the joy of real terrarium keeping: watching systems grow, optimizing ecosystems, and tinkering with long-term projects.
+This is not a game to "beat" - it's something you check on for 10-20 minute sessions, make decisions, watch progress, and return to later. Like real gardening, success comes from understanding interconnected systems and patient observation.
 
-## Current Status: Phase 2 - Plants Growing! ✅
+## Current Status: Phase 1.1 Complete ✅ → Moving to Phase 1.2
 
-The project now includes procedurally-generated plants using L-systems. A test fern grows in the terrarium!
+The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene) is complete with grass ground, paver tiles, and pot container system fully functional.
 
 ### Getting Started
 
@@ -25,99 +25,137 @@ npm run dev
 npm run build
 ```
 
-**Current Features:**
+**Implemented:**
 - ✅ Vite + TypeScript development environment
 - ✅ Three.js 3D scene with orbit controls
-- ✅ Glass dome terrarium container
-- ✅ Soil bed with realistic materials
 - ✅ Professional lighting setup
-- ✅ **L-system plant generator** (NEW!)
-- ✅ **Procedurally-generated Fern** (NEW!)
+- ✅ **Plant3D system** - Full 3D realistic plants via ez-tree library
+- ✅ **Plant genetics** - Breeding, cloning, trait inheritance
+- ✅ **6 plant presets** - Fern, Bush, Tree, Vine, Pine, Sapling
+- ✅ **Leaf animation** - Wind/sway effects
 - ✅ Feature-based code architecture
+- ✅ **Phase 1.1 Complete** - Backyard scene with grass, pavers, and pot system
 
-**Controls:**
-- Drag to rotate camera
-- Scroll to zoom in/out
-- Watch the fern growing from the center!
+**Current Phase (1.1 - Foundation & Scene):**
+- ✅ Transform terrarium contents to backyard scene (inside dome)
+- ✅ Glass dome as "snow globe" framing device
+- ✅ Grass ground plane and paver tiles
+- ✅ Pot container system
 
-**Prototype Available:**
-The original HTML prototype is available in `notes/prototype.html` and includes:
-- 🌱 L-system procedural plant generation
-- 🎨 5 plant presets + random generation
-- 🎯 Click to add plants
+**Upcoming Phases:**
+- ⏳ Phase 1.2 - Core Economy (money, shop, transactions)
+- ⏳ Phase 1.3 - Soil & Water (NPK, pH, drainage, watering)
+- ⏳ Phase 1.4 - Plant Growth (lifecycle stages, time controls)
+- ⏳ Phase 1.5 - Harvest & Income (fruit collection, sales)
+- ⏳ Phase 1.6 - Side Activities (worm digging, composting)
+- ⏳ Phase 1.7 - Light & Polish (sun simulation, UI polish)
 
-## How It Works
+## Core Concept
 
-Plants are generated using **L-systems** (Lindenmayer systems) - a mathematical approach where simple rules create complex branching structures:
+You start with a single potted avocado plant (a gift from your grandmother) in a small backyard contained within a glass dome. Like a living snow globe, each environment is framed by transparent glass, giving the game a unique miniature diorama aesthetic. Your goal: build a thriving garden operation by:
 
-```
-Rule: "F[+F][-F]F"
-F = grow forward
-+ = turn left
-- = turn right
-[ = start branch
-] = end branch
+- Managing soil nutrients (NPK ratios, pH, drainage)
+- Controlling light exposure and watering
+- Harvesting and selling fruit for income
+- Earning money through side jobs (digging worms, composting)
+- Expanding your operation with new pots, plants, and equipment
+- Pruning plants to control shape and encourage growth
 
-Apply rule 3 times → Complex plant structure emerges!
-```
+Every system is interconnected - pruning creates compost, compost attracts worms, worms = money, money buys nutrients for better plants. The loop is endlessly satisfying.
 
-## Roadmap
+## Game Systems
 
-### Phase 0: Prototype ✅
-- [x] L-system plant generator
-- [x] Interactive browser demo
-- [x] Multiple plant presets
+### Phase 1: Core Simulation (Current Focus)
 
-### Week 1: The Terrarium (In Progress)
-**Phase 1: Basic Scene ✅**
-- [x] Set up Vite + Three.js + TypeScript
-- [x] Glass dome container with realistic glass material
-- [x] Soil bed and lighting
-- [x] Orbit camera controls
+Phase 1 is broken into 7 manageable sub-phases for iterative development:
 
-**Phase 2: Plant Generation ✅**
-- [x] L-system string generator
-- [x] Turtle graphics geometry builder
-- [x] Plant entity class
-- [x] Fern preset renders in terrarium
+#### **1.1 - Foundation & Scene** (Week 1)
+- Transform terrarium contents to backyard scene (grass, pavers, pots inside dome)
+- Keep glass dome as "snow globe" framing device
+- Basic pot container system
+- Camera controls for dome viewing
+- Single plant in pot (using existing Plant3D)
 
-**Phase 3-5: Growth & Interaction**
-- [ ] Growth animation over time
-- [ ] Time controls (pause/speed up)
-- [ ] Click soil to plant seeds
-- [ ] Click plant to inspect details
+#### **1.2 - Core Economy** (Week 1-2)
+- Economy system (money tracking)
+- Basic shop UI (buy pots, soil, fertilizer)
+- Transaction system
+- Money display in UI
 
-### Week 2: Interaction
-- [ ] Harvest seeds from mature plants
-- [ ] Seed inventory system
-- [ ] Water individual plants
-- [ ] Visual feedback for plant needs
+#### **1.3 - Soil & Water** (Week 2)
+- Soil chemistry class (NPK, pH, drainage, water)
+- Watering mechanic
+- Visual feedback for soil states
+- Plant inspection UI (show soil stats)
 
-### Week 3: Pruning & Cuttings
-- [ ] Click branches to prune
-- [ ] Take cuttings (clone plants)
-- [ ] Plants respond to pruning
+#### **1.4 - Plant Growth** (Week 3)
+- Lifecycle stages (seed → fruiting)
+- Growth tied to soil nutrients + time
+- Visual changes per growth stage
+- Time controls (pause, 1x, 5x, 10x)
 
-### Week 4: Genetics
-- [ ] View plant genetics
-- [ ] Cross-pollinate plants
-- [ ] Create hybrid species
-- [ ] Visual trait inheritance
+#### **1.5 - Harvest & Income** (Week 3-4)
+- Fruit generation on mature plants
+- Harvest mechanic (click fruit → collect)
+- Sell fruit for money (close the economic loop)
+- Seeds from harvested fruit
 
-### Week 5+: Collection System
-- [ ] Seed vault interface
-- [ ] Breeding lab
-- [ ] Species catalog
-- [ ] Multiple terrarium biomes
+#### **1.6 - Side Activities** (Week 4)
+- Worm digging system
+- Compost bin basic version
+- Pruning basics (if time allows)
 
-## Philosophy
+#### **1.7 - Light & Polish** (Week 5)
+- Light simulation (position-based sun exposure)
+- Plant stress visuals
+- UI polish and tutorial tooltips
 
-This isn't a game with objectives or scores. It's a **digital hobby** you check on daily and tend to, like real terrariums:
+**Core Systems Overview:**
+- NPK (Nitrogen, Phosphorus, Potassium) tracking
+- pH levels affecting nutrient availability
+- Drainage types (poor, medium, good)
+- Water management
+- Economic progression (earn from sales, spend on expansion)
+- Plant lifecycle (seed → sprout → seedling → young → mature → fruiting)
+- Position-based light exposure
+- Pruning and regrowth mechanics
+- Side activities (worm digging, composting)
 
-- **No win/lose states** - Just observation and tinkering
-- **Procedural beauty** - No art skills required, geometry emerges from rules
-- **Satisfying feedback** - Watch numbers go up, watch plants grow
-- **Long-term projects** - Build your collection over time
+### Phase 2: Expansion (Future)
+- Breeding and genetics system
+- Indoor vs outdoor growing (different dome contents)
+- Pest and disease management
+- Advanced training (bonsai, wire training)
+- Propagation stations for cuttings
+- Multiple domes for different growing areas
+- Weather and seasons (visible through dome)
+- More plant species
+
+## Design Philosophy
+
+**Living Diorama Aesthetic**
+- All environments contained in glass domes (snow globe style)
+- Creates a unique miniature world feel
+- Dome stays constant, contents change (backyard, indoor, greenhouse)
+- Signature visual identity that sets Botanica apart
+
+**A Digital Hobby, Not a Game**
+- Check in for 10-20 minute sessions, not multi-hour playthroughs
+- No win/lose states - just feedback loops and optimization
+- Systems that teach real gardening knowledge through gameplay
+- Patient observation rewarded over twitch reflexes
+
+**Semi-Realistic Simulation**
+- Real concepts (NPK ratios, pH, photosynthesis) in accessible form
+- Visual feedback over number watching
+- Interconnected systems create emergent complexity
+- Learn by doing, not tutorials
+
+**Economic Core**
+- Everything costs money, money comes from what you grow
+- Early game: Bootstrap from nothing (worm digging, first fruit)
+- Mid game: Optimize production and sales
+- Late game: Breeding, collection, experimentation
 
 ## Technical Stack
 
@@ -130,20 +168,35 @@ This isn't a game with objectives or scores. It's a **digital hobby** you check 
 ```
 src/
 ├── scene/            # Scene, Camera, Lighting
-├── terrarium/        # GlassDome, Soil
-├── plants/           # L-system generator, geometry builder, presets
+├── environment/      # GlassDome, GrassGround, Pavers
+├── containers/       # Pot system for plants
+├── plants/           # Plant3D system, genetics, presets
 ├── types/            # TypeScript definitions
 └── main.ts           # Application entry point
 ```
 
-## Development
+## Documentation
 
-Full development documentation lives in the `_context-vault/personal/botanica/` directory:
+Comprehensive documentation is in the `/docs` directory:
 
-- **Ideas**: Initial concept brainstorming
-- **Specs**: Detailed specifications (UX, technical, MVP)
-- **Decisions**: Design decisions with rationale
-- **DevLogs**: Development progress journal
+- **[GAME_DESIGN.md](docs/GAME_DESIGN.md)** - Complete game design specification
+  - Core systems in detail
+  - Starting scenario and progression
+  - Game loop and player activities
+  - UI/UX specifications
+  - Phase 1 and Phase 2 features
+
+- **[TECHNICAL_NOTES.md](docs/TECHNICAL_NOTES.md)** - Implementation status
+  - What's implemented vs what needs building
+  - Architecture recommendations
+  - Technical challenges and solutions
+  - Development roadmap
+
+- **[PLANT3D_GUIDE.md](docs/PLANT3D_GUIDE.md)** - Plant3D/ez-tree integration guide
+  - Usage examples
+  - Preset configurations
+  - Genetics and breeding
+  - Performance optimization
 
 ## Inspiration
 
@@ -158,5 +211,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Active Development | **Latest**: Phase 2 Complete - L-System Plants! 🌱  
-**Repository**: https://github.com/Jaxsbr/Botanica.git
+**Status**: Phase 1.1 Complete ✅ | **Latest**: Backyard scene with grass, pavers, and pot system implemented | **Next**: Phase 1.2 - Core Economy 🚀  
+**Repository**: https://github.com/Jaxsbr/Botanica.git  
+**Documentation**: See `/docs` directory for complete specifications

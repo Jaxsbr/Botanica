@@ -24,6 +24,8 @@ export class LightingManager {
         this.sunLight.shadow.camera.right = 10;
         this.sunLight.shadow.camera.top = 10;
         this.sunLight.shadow.camera.bottom = -10;
+        this.sunLight.shadow.bias = -0.0001; // Reduce shadow artifacts
+        this.sunLight.shadow.normalBias = 0.02; // Additional bias for smoother shadows
 
         scene.add(this.sunLight);
     }
