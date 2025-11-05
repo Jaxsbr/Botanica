@@ -14,43 +14,129 @@ export class Pot {
     }
 
     private createPot(): void {
-        const { topRadius, bottomRadius, height, color, rimHeight } = this.config;
+        const { topRadius, bottomRadius, height, thickness, color, rimHeight, soilHeight, soilColor } = this.config;
 
-        // Create main pot body (tapered cylinder)
-        const bodyGeometry = new THREE.CylinderGeometry(
-            topRadius,      // radiusTop
-            bottomRadius,   // radiusBottom
-            height,         // height
-            64,            // radialSegments (increased for smoother lighting)
-            8,             // heightSegments (increased for better vertical shading)
-            false          // openEnded
-        );
+        // Calculate inner radii for hollow pot
+        const innerTopRadius = topRadius - thickness;
+        const innerBottomRadius = bottomRadius - thickness;
 
-        const bodyMaterial = new THREE.MeshStandardMaterial({
+        const potMaterial = new THREE.MeshStandardMaterial({
             color: color,
-            roughness: 0.85, // Slightly rougher for more matte terracotta look
+            roughness: 0.85,
             metalness: 0,
-            envMapIntensity: 0.3 // Add subtle environment reflections for depth
+            envMapIntensity: 0.3
         });
 
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.castShadow = true;
-        body.receiveShadow = true;
-        this.group.add(body);
+        // Use LatheGeometry to create a proper hollow pot with thickness
+        // Define the outer profile
+        const outerPoints: THREE.Vector2[] = [];
+        const innerPoints: THREE.Vector2[] = [];
+        const segments = 16;
 
-        // Create rim detail
-        const rimGeometry = new THREE.CylinderGeometry(
-            topRadius + 0.02,  // Slightly wider than top
-            topRadius,
-            rimHeight,
-            64  // Match body segments for consistent quality
+        // Build outer and inner profiles from bottom to top
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const y = -height / 2 + (height * t);
+            const outerR = THREE.MathUtils.lerp(bottomRadius, topRadius, t);
+            const innerR = THREE.MathUtils.lerp(innerBottomRadius, innerTopRadius, t);
+
+            outerPoints.push(new THREE.Vector2(outerR, y));
+            innerPoints.push(new THREE.Vector2(innerR, y));
+        }
+
+        // Create the pot walls using a shape with a hole
+        const shape = new THREE.Shape();
+
+        // Outer profile (clockwise)
+        shape.moveTo(bottomRadius, -height / 2);
+        for (let i = 1; i < outerPoints.length; i++) {
+            shape.lineTo(outerPoints[i].x, outerPoints[i].y);
+        }
+        // Top rim extension
+        shape.lineTo(topRadius + 0.02, height / 2);
+        shape.lineTo(topRadius + 0.02, height / 2 + rimHeight);
+
+        // Come back along rim
+        shape.lineTo(innerTopRadius, height / 2 + rimHeight);
+        shape.lineTo(innerTopRadius, height / 2);
+
+        // Inner profile (counter-clockwise for hole)
+        for (let i = innerPoints.length - 1; i >= 0; i--) {
+            shape.lineTo(innerPoints[i].x, innerPoints[i].y);
+        }
+
+        // Close at bottom
+        shape.lineTo(bottomRadius, -height / 2);
+
+        // Extrude the shape as a lathe (rotate around Y axis)
+        const extrudeSettings = {
+            steps: 64,
+            depth: 0.1,
+            bevelEnabled: false
+        };
+
+        // Use LatheGeometry instead for proper circular pot
+        const points: THREE.Vector2[] = [];
+
+        // Bottom outer corner
+        points.push(new THREE.Vector2(bottomRadius, -height / 2));
+
+        // Outer wall
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const y = -height / 2 + (height * t);
+            const r = THREE.MathUtils.lerp(bottomRadius, topRadius, t);
+            points.push(new THREE.Vector2(r, y));
+        }
+
+        // Rim outer edge
+        points.push(new THREE.Vector2(topRadius + 0.02, height / 2));
+        points.push(new THREE.Vector2(topRadius + 0.02, height / 2 + rimHeight));
+
+        // Rim top
+        points.push(new THREE.Vector2(innerTopRadius, height / 2 + rimHeight));
+        points.push(new THREE.Vector2(innerTopRadius, height / 2));
+
+        // Inner wall (going down)
+        for (let i = segments; i >= 0; i--) {
+            const t = i / segments;
+            const y = -height / 2 + (height * t);
+            const r = THREE.MathUtils.lerp(innerBottomRadius, innerTopRadius, t);
+            points.push(new THREE.Vector2(r, y));
+        }
+
+        // Bottom
+        points.push(new THREE.Vector2(innerBottomRadius, -height / 2));
+
+        const potGeometry = new THREE.LatheGeometry(points, 64);
+        const pot = new THREE.Mesh(potGeometry, potMaterial);
+        pot.castShadow = true;
+        pot.receiveShadow = true;
+        this.group.add(pot);
+
+        // Create soil inside pot
+        const actualSoilHeight = height * soilHeight;
+        const soilY = (-height / 2) + (actualSoilHeight / 2);
+        const soilTopRadius = THREE.MathUtils.lerp(innerBottomRadius, innerTopRadius, soilHeight);
+
+        const soilGeometry = new THREE.CylinderGeometry(
+            soilTopRadius * 0.99, // Slightly smaller to avoid z-fighting
+            innerBottomRadius * 0.99,
+            actualSoilHeight,
+            64
         );
 
-        const rim = new THREE.Mesh(rimGeometry, bodyMaterial);
-        rim.position.y = (height / 2) + (rimHeight / 2);
-        rim.castShadow = true;
-        rim.receiveShadow = true;
-        this.group.add(rim);
+        const soilMaterial = new THREE.MeshStandardMaterial({
+            color: soilColor,
+            roughness: 0.95,
+            metalness: 0
+        });
+
+        const soil = new THREE.Mesh(soilGeometry, soilMaterial);
+        soil.position.y = soilY;
+        soil.receiveShadow = true;
+        soil.castShadow = false;
+        this.group.add(soil);
 
         // Position entire pot so bottom sits at y=0
         this.group.position.y = height / 2;
@@ -83,10 +169,10 @@ export class Pot {
     }
 
     public getPlantPosition(): THREE.Vector3 {
-        // Plants should be positioned at soil level
-        // Soil at 50% allows more plant structure to be visible above pot rim
-        const soilLevel = this.config.height * 0.5;
-        return new THREE.Vector3(0, soilLevel - (this.config.height / 2), 0);
+        // Plants should be positioned at soil surface level
+        const actualSoilHeight = this.config.height * this.config.soilHeight;
+        const soilTopY = (-this.config.height / 2) + actualSoilHeight;
+        return new THREE.Vector3(0, soilTopY, 0);
     }
 
     public getGroup(): THREE.Group {
