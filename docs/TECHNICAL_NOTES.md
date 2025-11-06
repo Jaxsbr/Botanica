@@ -1,7 +1,7 @@
 # Botanica - Technical Implementation Notes
 
-**Last Updated:** November 5, 2025  
-**Version:** 1.1 - MVP Refinements
+**Last Updated:** November 6, 2025  
+**Version:** 1.2 - Phase 1.2 Complete (Inventory & Input Manager)
 
 ## Current Implementation Status
 
@@ -72,7 +72,86 @@ The **podule system** is the core architectural pattern for organizing game area
 
 **Design Philosophy:** Each game area (Home, Shop, Indoor, Greenhouse, etc.) exists as a separate podule. The glass dome framing stays constant, but contents and functionality change per podule. This creates a unique "living diorama" aesthetic and clear separation of concerns.
 
-#### 4. Development Environment (WORKING)
+#### 4. Input Manager System (FULLY IMPLEMENTED ✅)
+**Location:** `src/systems/InputManager.ts`, `src/types/index.ts`
+
+The **InputManager** is a centralized input handling system that routes mouse/touch events to the active podule, preventing click-through issues.
+
+**Architecture:**
+- Single `InputManager` owns all global `window.addEventListener()` calls
+- Routes input only to the currently active podule
+- Podules opt-in via `IClickable` interface
+- Overlay awareness system blocks input when modals are open
+
+**Key Components:**
+- `InputManager.ts` - Central input handler with global event listeners
+- `IClickable` interface - Contract for interactive podules
+- `HotspotManager.ts` - Pure raycasting logic (no input handling)
+
+**How It Works:**
+```typescript
+// 1. Interactive podules implement IClickable
+export class ShopPodule extends BasePodule implements IClickable {
+    handleClick(mouse: Vector2, camera: Camera): boolean {
+        const category = this.hotspotManager.checkClick(mouse);
+        if (category) {
+            this.shopUI.show(category);
+            return true; // Click handled
+        }
+        return false;
+    }
+    
+    handleMouseMove(mouse: Vector2, camera: Camera): void {
+        const hoveredHotspot = this.hotspotManager.checkHover(mouse);
+        document.body.style.cursor = hoveredHotspot ? 'pointer' : 'default';
+    }
+}
+
+// 2. InputManager routes to active podule
+private onMouseMove(event: MouseEvent): void {
+    if (this.shouldRouteInput()) {
+        const podule = this.poduleManager.getCurrentPodule();
+        if (this.isClickable(podule)) {
+            podule.handleMouseMove(this.mouse, this.camera);
+        }
+    }
+}
+```
+
+**Why This Architecture:**
+- **Eliminates Click-Through**: Input only goes to active podule
+- **Clean Lifecycle**: Event listeners properly added/removed
+- **Scalable**: Easy to add new interactive podules
+- **Single Source of Truth**: All input flows through one manager
+- **Debuggable**: One place to check for input issues
+
+**Pattern for New Podules:**
+```typescript
+// Interactive podule - implements IClickable
+export class NewInteractivePodule extends BasePodule implements IClickable {
+    handleClick(mouse: Vector2, camera: Camera): boolean { /* ... */ }
+    handleMouseMove(mouse: Vector2, camera: Camera): void { /* ... */ }
+}
+
+// Non-interactive podule - does NOT implement IClickable
+export class NewStaticPodule extends BasePodule {
+    // InputManager automatically skips this podule
+}
+```
+
+**Overlay Awareness:**
+```typescript
+// Register overlay to block podule input
+this.inputManager.registerOverlay('inventory');
+
+// Unregister when closed
+this.inputManager.unregisterOverlay('inventory');
+```
+
+**Historical Context:**
+Prior to this system, `HotspotManager` created global event listeners in its constructor, causing persistent click-through issues where clicks in one podule would trigger actions in another. The Central Input Manager pattern solved this by ensuring only the active podule receives input events.
+
+#### 5. Development Environment (WORKING)
 - Vite + TypeScript setup
 - Three.js properly configured
 - Hot module reloading works

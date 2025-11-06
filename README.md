@@ -198,11 +198,11 @@ src/
 ├── shop/             # Hotspot system, ShopItems catalog, HotspotManager
 ├── economy/          # Economy system (money tracking, persistence)
 ├── inventory/        # Inventory system (item tracking, persistence)
-├── systems/          # PurchaseSystem (shop-economy-inventory bridge)
+├── systems/          # InputManager (central input routing), PurchaseSystem (shop-economy-inventory)
 ├── environment/      # PoduleDome, GrassGround, Pavers
 ├── containers/       # Pot system for plants
 ├── plants/           # Plant3D system, genetics, presets
-├── types/            # TypeScript definitions
+├── types/            # TypeScript definitions (including IClickable interface)
 └── main.ts           # Application entry point
 ```
 
