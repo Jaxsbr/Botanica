@@ -123,6 +123,30 @@ export interface PurchaseResult {
     message: string;
 }
 
+// Soil system types
+
+export type DrainageType = 'poor' | 'medium' | 'good';
+
+export interface SoilStats {
+    nitrogen: number;      // 0-100
+    phosphorus: number;    // 0-100
+    potassium: number;     // 0-100
+    pH: number;           // 4.0-9.0
+    drainage: DrainageType;
+    waterLevel: number;   // 0-100
+    maxWater: number;     // Based on drainage
+}
+
+export interface SoilSaveData {
+    nitrogen: number;
+    phosphorus: number;
+    potassium: number;
+    pH: number;
+    drainage: DrainageType;
+    waterLevel: number;
+    lastWateredTime?: number; // Optional for backwards compatibility
+}
+
 // Input system types
 
 /**

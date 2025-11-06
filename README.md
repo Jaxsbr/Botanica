@@ -8,9 +8,9 @@ Botanica is a **digital hobby** that combines deep horticultural systems with ac
 
 This is not a game to "beat" - it's something you check on for 10-20 minute sessions, make decisions, watch progress, and return to later. Like real gardening, success comes from understanding interconnected systems and patient observation.
 
-## Current Status: Phase 1.2 Complete ✅ → Moving to Phase 1.3
+## Current Status: Phase 1.3 Complete ✅ → Moving to Phase 1.4
 
-The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene) and Phase 1.2 (Core Economy) are complete with functional shop, economy, inventory, and purchase systems fully operational.
+The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene), Phase 1.2 (Core Economy), and Phase 1.3 (Soil & Water) are complete with functional soil chemistry, water depletion, and plant inspection systems fully operational.
 
 ### Getting Started
 
@@ -37,7 +37,7 @@ npm run build
 - ✅ **Phase 1.1 Complete** - Backyard scene with grass, pavers, and pot system
 - ✅ **Podule System** - Navigation between game areas (Home, Shop) with smooth transitions
 
-**Current Phase (1.2 - Core Economy):**
+**Phase 1.2 - Core Economy (Complete):**
 - ✅ Podule navigation system (Home ↔ Shop)
 - ✅ Podule architecture (BasePodule, PoduleManager)
 - ✅ Icon-based navigation UI with transitions
@@ -52,8 +52,26 @@ npm run build
 - ✅ **Inventory UI** - Modal overlay with category filtering and item display
 - ✅ **Functional Purchases** - Buy items, track quantities, disable re-purchase of tools/pots
 
+**Phase 1.3 - Soil & Water (Complete):**
+- ✅ **Soil Chemistry System** - NPK nutrients (N/P/K 0-100), pH levels (4.0-9.0), drainage types
+- ✅ **Water Management** - Water level tracking (0-100%), time-based depletion
+- ✅ **Drainage Effects** - Poor (slow evaporation), Medium (standard), Good (fast evaporation)
+- ✅ **Misleading Visual Feedback** - Soil color deceives based on drainage type
+  - Poor drainage: Surface looks wetter than actual (+15% visual offset)
+  - Good drainage: Surface looks drier than actual (-15% visual offset)
+  - Medium drainage: Accurate representation (like real gardening!)
+- ✅ **Plant Inspection UI** - Click pots to view soil stats and water levels
+- ✅ **Interactive Watering** - Water button (requires watering-can from shop)
+- ✅ **Three-Tier Information System** - Meaningful tool progression
+  - No meter: See "Last watered: X ago" + misleading visuals (risky!)
+  - Basic Moisture Meter ($25): Shows status text revealing true moisture
+  - Pro Moisture Meter ($50): Full stats with exact % and progress bar
+- ✅ **Pot Interactions** - Raycasting, hover cursors, clickable pots
+- ✅ **Water Depletion** - Automatic water loss over time based on drainage type
+- ✅ **Time Tracking** - Smart "last watered" display (just now, X mins/hours/days ago)
+- ✅ **Soil Persistence** - Save/load soil state with last watered time
+
 **Upcoming Phases:**
-- ⏳ Phase 1.3 - Soil & Water (NPK, pH, drainage, watering)
 - ⏳ Phase 1.4 - Plant Growth (lifecycle stages, time controls)
 - ⏳ Phase 1.5 - Harvest & Income (fruit collection, sales)
 - ⏳ Phase 1.6 - Side Activities (worm digging, composting)
@@ -70,6 +88,11 @@ npm run build
 7. **View Inventory** - Click the backpack icon (🎒) in the navigation bar to see all owned items
 8. **Filter Inventory** - Use category tabs to filter your items (All, Tools, Pots, Fertilizers, Soil)
 9. **Smart Purchases** - Tools/pots can only be bought once (button disables), consumables can be bought multiple times
+10. **Inspect Plants** - Click on pots in the home podule to view detailed soil stats
+11. **Monitor Soil Health** - Check water levels, NPK nutrients, pH, and drainage type
+12. **Water Your Plants** - Purchase a watering can ($5), then click "Water Plant" in the inspection UI
+13. **Watch Soil Changes** - Soil color darkens when wet, lightens as it dries over time
+14. **Get Moisture Alerts** - Buy a moisture meter ($15) to see detailed hydration status
 
 ## Core Concept
 
@@ -229,6 +252,13 @@ Comprehensive documentation is in the `/docs` directory:
   - Genetics and breeding
   - Performance optimization
 
+- **[VISUAL_SOIL_MOISTURE.md](docs/VISUAL_SOIL_MOISTURE.md)** - Visual soil moisture system
+  - How drainage types create misleading visuals
+  - Moisture to color mapping
+  - Three-tier information system (no meter / basic / pro)
+  - Gameplay decision-making and strategy
+  - Testing scenarios and examples
+
 ## Inspiration
 
 - Real-world terrarium and aquarium keeping
@@ -242,6 +272,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Phase 1.2 Complete ✅ → Moving to Phase 1.3 | **Latest**: Full inventory system with purchases, tracking & UI complete | **Next**: Soil & Water systems (NPK, pH, watering) 🚀  
+**Status**: Phase 1.3 Complete ✅ → Moving to Phase 1.4 | **Latest**: Full soil chemistry & water management with interactive plant inspection | **Next**: Plant Growth systems (lifecycle stages, time controls) 🚀  
 **Repository**: https://github.com/Jaxsbr/Botanica.git  
 **Documentation**: See `/docs` directory for complete specifications

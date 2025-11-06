@@ -504,3 +504,260 @@ canvas {
     padding: 60px 20px;
     line-height: 1.6;
 }
+
+/* Plant Inspection Modal */
+.plant-inspection-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    z-index: 2500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.plant-inspection-modal.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: all;
+}
+
+/* Plant Inspection Content */
+.plant-inspection-content {
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Plant Inspection Header */
+.plant-inspection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 15px;
+}
+
+.plant-inspection-header h2 {
+    font-size: 32px;
+    font-weight: 600;
+    margin: 0;
+    color: #4CAF50;
+}
+
+.plant-inspection-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.plant-inspection-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: rotate(90deg);
+}
+
+/* Plant Inspection Stats Section */
+.plant-inspection-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    color: white;
+}
+
+/* Stat Row (for bars) */
+.stat-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 60px;
+    align-items: center;
+    gap: 12px;
+}
+
+.stat-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stat-label-small {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-bar-container {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    height: 20px;
+    overflow: hidden;
+    position: relative;
+}
+
+.stat-bar {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Water Bar Colors */
+.water-bar.low {
+    background: linear-gradient(90deg, #d32f2f, #f44336);
+}
+
+.water-bar.medium {
+    background: linear-gradient(90deg, #f57c00, #fbc02d);
+}
+
+.water-bar.high {
+    background: linear-gradient(90deg, #388e3c, #4CAF50);
+}
+
+/* NPK Bars (gray for static phase) */
+.npk-bar {
+    background: #888;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #76FF03;
+    text-align: right;
+}
+
+/* Stat Info (for text displays) */
+.stat-info {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.9);
+    padding: 8px 0;
+}
+
+.stat-value-text {
+    font-weight: 700;
+    color: #76FF03;
+}
+
+/* Last Watered Display (shown when no moisture meter) */
+.last-watered-display {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Moisture Indicator (shown with basic or pro meter) */
+.moisture-indicator {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* NPK Section */
+.npk-section {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.npk-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 5px;
+}
+
+/* Plant Inspection Actions */
+.plant-inspection-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.action-btn {
+    flex: 1;
+    background: rgba(76, 175, 80, 0.3);
+    border: 2px solid rgba(76, 175, 80, 0.8);
+    color: white;
+    padding: 14px 24px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.5);
+    border-color: #76FF03;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+    transform: scale(1.05);
+}
+
+.action-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.action-btn:disabled {
+    background: rgba(100, 100, 100, 0.3);
+    border-color: rgba(150, 150, 150, 0.5);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: not-allowed;
+}
+
+/* Watering Animation */
+.action-btn.watering {
+    animation: water-pulse 0.5s ease;
+}
+
+@keyframes water-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        background: rgba(76, 175, 80, 0.3);
+    }
+
+    50% {
+        transform: scale(1.1);
+        background: rgba(33, 150, 243, 0.6);
+        border-color: #2196F3;
+        box-shadow: 0 0 30px rgba(33, 150, 243, 0.8);
+    }
+}

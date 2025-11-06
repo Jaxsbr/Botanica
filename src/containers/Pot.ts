@@ -1,15 +1,19 @@
 import * as THREE from 'three';
 import { POT_PRESETS, PotConfig } from './PotTypes';
 import { Plant3D } from '../plants/Plant3D';
+import { Soil } from '../systems/Soil';
 
 export class Pot {
     private group: THREE.Group;
     private config: PotConfig;
     private plant: Plant3D | null = null;
+    private soil: Soil;
+    private soilMesh: THREE.Mesh | null = null;
 
     constructor(presetName: 'small' | 'large' = 'small') {
         this.config = POT_PRESETS[presetName];
         this.group = new THREE.Group();
+        this.soil = new Soil('medium'); // Default to medium drainage
         this.createPot();
     }
 
@@ -132,11 +136,14 @@ export class Pot {
             metalness: 0
         });
 
-        const soil = new THREE.Mesh(soilGeometry, soilMaterial);
-        soil.position.y = soilY;
-        soil.receiveShadow = true;
-        soil.castShadow = false;
-        this.group.add(soil);
+        this.soilMesh = new THREE.Mesh(soilGeometry, soilMaterial);
+        this.soilMesh.position.y = soilY;
+        this.soilMesh.receiveShadow = true;
+        this.soilMesh.castShadow = false;
+        this.group.add(this.soilMesh);
+
+        // Set initial soil color based on water level
+        this.updateSoilColor();
 
         // Position entire pot so bottom sits at y=0
         this.group.position.y = height / 2;
@@ -181,6 +188,29 @@ export class Pot {
 
     public setPosition(x: number, y: number, z: number): void {
         this.group.position.set(x, y, z);
+    }
+
+    public getSoil(): Soil {
+        return this.soil;
+    }
+
+    /**
+     * Update pot state - updates soil and visual feedback
+     */
+    public update(deltaTime: number): void {
+        this.soil.update(deltaTime);
+        this.updateSoilColor();
+    }
+
+    /**
+     * Update soil mesh color based on VISUAL water level (misleading)
+     * Players see drainage-affected color, not actual moisture
+     */
+    private updateSoilColor(): void {
+        if (this.soilMesh && this.soilMesh.material instanceof THREE.MeshStandardMaterial) {
+            const targetColor = this.soil.getVisualWaterColor();
+            this.soilMesh.material.color.setHex(targetColor);
+        }
     }
 
     public dispose(): void {

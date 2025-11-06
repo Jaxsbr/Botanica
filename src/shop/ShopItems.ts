@@ -45,6 +45,24 @@ export const SHOP_ITEMS: ShopItem[] = [
         icon: '🧪',
         unlocked: true
     },
+    {
+        id: 'basic-moisture-meter',
+        name: 'Basic Moisture Meter',
+        price: 25,
+        category: 'tools',
+        description: 'Shows moisture status - essential for plant care',
+        icon: '💧',
+        unlocked: true
+    },
+    {
+        id: 'pro-moisture-meter',
+        name: 'Pro Moisture Meter',
+        price: 50,
+        category: 'tools',
+        description: 'Precise moisture readings with exact percentages',
+        icon: '📊',
+        unlocked: true
+    },
 
     // Pots
     {

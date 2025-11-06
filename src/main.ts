@@ -14,6 +14,7 @@ import { PurchaseSystem } from './systems/PurchaseSystem';
 import { InputManager } from './systems/InputManager';
 import { ShopCategoryUI } from './ui/ShopCategoryUI';
 import { InventoryUI } from './ui/InventoryUI';
+import { PlantInspectionUI } from './ui/PlantInspectionUI';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
 
 class Botanica {
@@ -32,6 +33,7 @@ class Botanica {
     private moneyDisplay: MoneyDisplay;
     private shopUI: ShopCategoryUI;
     private inventoryUI: InventoryUI;
+    private plantInspectionUI: PlantInspectionUI;
     private deltaTime: number = 0.0005; // Time delta for animations
 
     constructor() {
@@ -74,6 +76,7 @@ class Botanica {
         this.moneyDisplay = new MoneyDisplay();
         this.shopUI = new ShopCategoryUI(this.purchaseSystem, this.inventory);
         this.inventoryUI = new InventoryUI(this.inventory);
+        this.plantInspectionUI = new PlantInspectionUI(this.inventory);
         this.transitionOverlay = new TransitionOverlay(300);
         this.navigationUI = new NavigationUI();
 
@@ -84,7 +87,7 @@ class Botanica {
         this.poduleManager = new PoduleManager(this.sceneManager.scene);
 
         // Create podules
-        const homePodule = new HomePodule(poduleConfig);
+        const homePodule = new HomePodule(poduleConfig, this.inventory, this.plantInspectionUI);
         const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI);
 
         this.poduleManager.addPodule(homePodule);
@@ -118,6 +121,19 @@ class Botanica {
         this.inventoryUI.onClose(() => {
             this.inputManager.unregisterOverlay('inventory');
         });
+
+        // Wire up plant inspection UI with overlay awareness
+        this.plantInspectionUI.onClose(() => {
+            this.inputManager.unregisterOverlay('plant-inspection');
+        });
+
+        // Note: We don't need explicit open handler because HomePodule calls show() directly
+        // But we need to ensure overlay is registered when opened
+        const originalShow = this.plantInspectionUI.show.bind(this.plantInspectionUI);
+        this.plantInspectionUI.show = (pot) => {
+            originalShow(pot);
+            this.inputManager.registerOverlay('plant-inspection');
+        };
 
         // Start with home podule
         this.poduleManager.switchToPodule('home');
@@ -155,6 +171,7 @@ class Botanica {
         this.moneyDisplay.dispose();
         this.shopUI.dispose();
         this.inventoryUI.dispose();
+        this.plantInspectionUI.dispose();
     }
 
     /**
