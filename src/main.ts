@@ -7,6 +7,12 @@ import { HomePodule } from './podules/HomePodule';
 import { ShopPodule } from './podules/ShopPodule';
 import { NavigationUI } from './ui/NavigationUI';
 import { TransitionOverlay } from './ui/TransitionOverlay';
+import { Economy } from './economy/Economy';
+import { MoneyDisplay } from './ui/MoneyDisplay';
+import { Inventory } from './inventory/Inventory';
+import { PurchaseSystem } from './systems/PurchaseSystem';
+import { ShopCategoryUI } from './ui/ShopCategoryUI';
+import { InventoryUI } from './ui/InventoryUI';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
 
 class Botanica {
@@ -18,6 +24,12 @@ class Botanica {
     private poduleManager: PoduleManager;
     private navigationUI: NavigationUI;
     private transitionOverlay: TransitionOverlay;
+    private economy: Economy;
+    private inventory: Inventory;
+    private purchaseSystem: PurchaseSystem;
+    private moneyDisplay: MoneyDisplay;
+    private shopUI: ShopCategoryUI;
+    private inventoryUI: InventoryUI;
     private deltaTime: number = 0.0005; // Time delta for animations
 
     constructor() {
@@ -51,19 +63,30 @@ class Botanica {
         this.cameraManager = new CameraManager(this.sceneManager.renderer, cameraConfig);
         this.lightingManager = new LightingManager(this.sceneManager.scene, lightingConfig);
 
+        // Initialize economy and inventory systems
+        this.economy = new Economy();
+        this.inventory = new Inventory();
+        this.purchaseSystem = new PurchaseSystem(this.economy, this.inventory);
+
+        // Initialize UI
+        this.moneyDisplay = new MoneyDisplay();
+        this.shopUI = new ShopCategoryUI(this.purchaseSystem, this.inventory);
+        this.inventoryUI = new InventoryUI(this.inventory);
+        this.transitionOverlay = new TransitionOverlay(300);
+        this.navigationUI = new NavigationUI();
+
+        // Wire up economy to money display
+        this.economy.subscribe((money) => this.moneyDisplay.update(money));
+
         // Initialize podule system
         this.poduleManager = new PoduleManager(this.sceneManager.scene);
 
         // Create podules
         const homePodule = new HomePodule(poduleConfig);
-        const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera);
+        const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI);
 
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);
-
-        // Initialize UI
-        this.transitionOverlay = new TransitionOverlay(300);
-        this.navigationUI = new NavigationUI();
 
         // Wire up navigation
         this.navigationUI.onClick(async (type) => {
@@ -71,6 +94,23 @@ class Botanica {
             this.poduleManager.switchToPodule(type);
             this.navigationUI.setActive(type);
             await this.transitionOverlay.fadeIn();
+        });
+
+        // Wire up inventory button - disable shop hotspots when inventory opens
+        this.navigationUI.onInventoryClick(() => {
+            const isNowVisible = this.inventoryUI.toggle();
+
+            // Disable shop hotspots when inventory opens to prevent click-through
+            if (isNowVisible) {
+                shopPodule.setHotspotsEnabled(false);
+            }
+        });
+
+        // Re-enable shop hotspots when inventory closes (if shop is active)
+        this.inventoryUI.onClose(() => {
+            if (shopPodule.isActive) {
+                shopPodule.setHotspotsEnabled(true);
+            }
         });
 
         // Start with home podule
@@ -105,9 +145,35 @@ class Botanica {
         this.poduleManager.dispose();
         this.navigationUI.dispose();
         this.transitionOverlay.dispose();
+        this.moneyDisplay.dispose();
+        this.shopUI.dispose();
+        this.inventoryUI.dispose();
+    }
+
+    /**
+     * Expose systems for console testing
+     */
+    public getEconomy(): Economy {
+        return this.economy;
+    }
+
+    public getInventory(): Inventory {
+        return this.inventory;
+    }
+
+    public getPurchaseSystem(): PurchaseSystem {
+        return this.purchaseSystem;
     }
 }
 
 // Initialize application
-new Botanica();
+const botanica = new Botanica();
+
+// Expose to window for console testing
+declare global {
+    interface Window {
+        botanica: Botanica;
+    }
+}
+window.botanica = botanica;
 

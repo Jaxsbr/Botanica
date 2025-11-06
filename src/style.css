@@ -27,11 +27,11 @@ canvas {
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 12px;
+    gap: 16px;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(10px);
-    padding: 12px 20px;
-    border-radius: 50px;
+    padding: 16px 24px;
+    border-radius: 60px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     z-index: 1000;
 }
@@ -40,8 +40,8 @@ canvas {
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
+    width: 96px;
+    height: 96px;
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
@@ -67,7 +67,7 @@ canvas {
 }
 
 .nav-icon {
-    font-size: 24px;
+    font-size: 48px;
     line-height: 1;
 }
 
@@ -119,7 +119,7 @@ canvas {
 }
 
 .shop-category-header h2 {
-    font-size: 32px;
+    font-size: 42px;
     font-weight: 600;
     margin: 0;
     color: #4CAF50;
@@ -159,7 +159,7 @@ canvas {
     grid-column: 1 / -1;
     text-align: center;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 18px;
+    font-size: 20px;
     padding: 60px 20px;
 }
 
@@ -185,26 +185,26 @@ canvas {
 }
 
 .shop-item-icon {
-    font-size: 48px;
+    font-size: 64px;
     line-height: 1;
 }
 
 .shop-item-name {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 600;
     color: white;
     text-align: center;
 }
 
 .shop-item-description {
-    font-size: 14px;
+    font-size: 16px;
     color: rgba(255, 255, 255, 0.7);
     text-align: center;
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
 .shop-item-price {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
     color: #76FF03;
     margin-top: auto;
@@ -214,9 +214,9 @@ canvas {
     background: rgba(76, 175, 80, 0.3);
     border: 2px solid rgba(76, 175, 80, 0.8);
     color: white;
-    padding: 10px 30px;
+    padding: 12px 32px;
     border-radius: 25px;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -242,9 +242,9 @@ canvas {
     transform: translateX(-50%) translateY(-20px);
     background: rgba(76, 175, 80, 0.9);
     color: white;
-    padding: 15px 30px;
-    border-radius: 25px;
-    font-size: 16px;
+    padding: 18px 36px;
+    border-radius: 28px;
+    font-size: 18px;
     font-weight: 600;
     z-index: 3000;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -255,4 +255,255 @@ canvas {
 .shop-purchase-feedback.visible {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+}
+
+/* Money Display */
+.money-display {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 24px;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    transition: background 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.money-display.flash-green {
+    background: rgba(76, 175, 80, 0.8);
+    border-color: rgba(76, 175, 80, 1);
+}
+
+.money-display.flash-red {
+    background: rgba(244, 67, 54, 0.8);
+    border-color: rgba(244, 67, 54, 1);
+}
+
+/* Shop Item Price Container */
+.shop-item-price-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: auto;
+}
+
+/* Shop Item Owned Badge */
+.shop-item-owned {
+    font-size: 14px;
+    font-weight: 600;
+    color: #76FF03;
+    background: rgba(76, 175, 80, 0.2);
+    padding: 6px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+/* Disabled Buy Button */
+.shop-item-buy-btn.disabled {
+    background: rgba(100, 100, 100, 0.3);
+    border-color: rgba(150, 150, 150, 0.5);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: not-allowed;
+}
+
+.shop-item-buy-btn.disabled:hover {
+    background: rgba(100, 100, 100, 0.3);
+    border-color: rgba(150, 150, 150, 0.5);
+    box-shadow: none;
+    transform: none;
+}
+
+/* Purchase Feedback - Success/Failure States */
+.shop-purchase-feedback.success {
+    background: rgba(76, 175, 80, 0.9);
+}
+
+.shop-purchase-feedback.failure {
+    background: rgba(244, 67, 54, 0.9);
+}
+
+/* Inventory Button */
+.nav-button.inventory-button {
+    /* Inventory button uses default nav-button styling */
+}
+
+/* Inventory Modal */
+.inventory-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    z-index: 2500;
+    /* Higher than shop UI (2000) to prevent overlap */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.inventory-modal.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: all;
+}
+
+/* Inventory Content Container */
+.inventory-content {
+    background: rgba(20, 20, 20, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 900px;
+    max-height: 80vh;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Inventory Header */
+.inventory-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+}
+
+.inventory-header h2 {
+    font-size: 42px;
+    font-weight: 600;
+    margin: 0;
+    color: #4CAF50;
+}
+
+.inventory-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inventory-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: rotate(90deg);
+}
+
+/* Inventory Tabs */
+.inventory-tabs {
+    display: flex;
+    gap: 10px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.inventory-tab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.inventory-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.inventory-tab.active {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.8);
+    color: white;
+}
+
+/* Inventory Grid */
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    overflow-y: auto;
+    padding: 10px;
+    max-height: 50vh;
+}
+
+/* Inventory Item Card */
+.inventory-item {
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.inventory-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(76, 175, 80, 0.5);
+    transform: translateY(-3px);
+}
+
+.inventory-item-icon {
+    font-size: 48px;
+    line-height: 1;
+}
+
+.inventory-item-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    line-height: 1.3;
+}
+
+.inventory-item-quantity {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(76, 175, 80, 0.8);
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Inventory Empty State */
+.inventory-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    padding: 60px 20px;
+    line-height: 1.6;
 }

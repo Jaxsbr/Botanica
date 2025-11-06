@@ -1,11 +1,14 @@
 import type { ShopCategory, ShopItem } from '../types';
 import { getUnlockedItemsByCategory } from '../shop/ShopItems';
+import { PurchaseSystem } from '../systems/PurchaseSystem';
+import { Inventory } from '../inventory/Inventory';
 
 /**
  * ShopCategoryUI - Filtered shop overlay showing items from a specific category
  * 
  * Displays a grid of purchasable items when a hotspot is clicked.
- * Includes item details, prices, and mock purchase buttons.
+ * Includes item details, prices, purchase buttons, and owned quantities.
+ * Integrates with PurchaseSystem and Inventory.
  */
 export class ShopCategoryUI {
     private container: HTMLDivElement;
@@ -13,9 +16,15 @@ export class ShopCategoryUI {
     private currentCategory: ShopCategory | null = null;
     private closeCallback?: () => void;
 
-    constructor() {
+    constructor(
+        private purchaseSystem: PurchaseSystem,
+        private inventory: Inventory
+    ) {
         this.container = this.createContainer();
         document.body.appendChild(this.container);
+
+        // Subscribe to inventory changes to refresh UI
+        this.inventory.subscribe(() => this.refreshCurrentView());
     }
 
     /**
@@ -85,6 +94,20 @@ export class ShopCategoryUI {
     }
 
     /**
+     * Refresh the current view if visible
+     * Called when inventory changes
+     */
+    private refreshCurrentView(): void {
+        if (this.isVisible && this.currentCategory) {
+            // Rebuild the UI with current category
+            const items = getUnlockedItemsByCategory(this.currentCategory);
+            this.container.innerHTML = '';
+            this.container.appendChild(this.createHeader(this.currentCategory));
+            this.container.appendChild(this.createItemGrid(items));
+        }
+    }
+
+    /**
      * Create the header section
      */
     private createHeader(category: ShopCategory): HTMLElement {
@@ -149,36 +172,70 @@ export class ShopCategoryUI {
         description.className = 'shop-item-description';
         description.textContent = item.description;
 
-        // Price
+        // Price and owned status
+        const priceContainer = document.createElement('div');
+        priceContainer.className = 'shop-item-price-container';
+
         const price = document.createElement('div');
         price.className = 'shop-item-price';
         price.textContent = `$${item.price}`;
+        priceContainer.appendChild(price);
 
-        // Buy button (mock - no actual purchase yet)
+        // Show owned quantity if player owns this item
+        const quantity = this.inventory.getQuantity(item.id);
+        if (quantity > 0) {
+            const owned = document.createElement('div');
+            owned.className = 'shop-item-owned';
+
+            // Different display for boolean vs quantity categories
+            const isBooleanCategory = ['tools', 'pots'].includes(item.category);
+            owned.textContent = isBooleanCategory ? 'Owned' : `Owned: ${quantity}`;
+
+            priceContainer.appendChild(owned);
+        }
+
+        // Buy button
         const buyBtn = document.createElement('button');
         buyBtn.className = 'shop-item-buy-btn';
         buyBtn.textContent = 'Buy';
-        buyBtn.addEventListener('click', () => this.handleMockPurchase(item));
+
+        // Check if item can be purchased
+        const canPurchase = this.purchaseSystem.canPurchase(item);
+        if (!canPurchase) {
+            buyBtn.classList.add('disabled');
+            buyBtn.disabled = true;
+        }
+
+        buyBtn.addEventListener('click', () => this.handlePurchase(item));
 
         card.appendChild(icon);
         card.appendChild(name);
         card.appendChild(description);
-        card.appendChild(price);
+        card.appendChild(priceContainer);
         card.appendChild(buyBtn);
 
         return card;
     }
 
     /**
-     * Handle mock purchase (just visual feedback for now)
+     * Handle purchase attempt
      */
-    private handleMockPurchase(item: ShopItem): void {
-        console.log(`🛒 Mock purchase: ${item.name} for $${item.price}`);
+    private handlePurchase(item: ShopItem): void {
+        const result = this.purchaseSystem.attemptPurchase(item);
 
-        // Show temporary feedback
+        console.log(result.success ? '✅' : '❌', result.message);
+
+        // Show feedback message
+        this.showPurchaseFeedback(result.message, result.success);
+    }
+
+    /**
+     * Show purchase feedback message
+     */
+    private showPurchaseFeedback(message: string, success: boolean): void {
         const feedback = document.createElement('div');
-        feedback.className = 'shop-purchase-feedback';
-        feedback.textContent = `Purchased ${item.name}! (Mock)`;
+        feedback.className = `shop-purchase-feedback ${success ? 'success' : 'failure'}`;
+        feedback.textContent = message;
         document.body.appendChild(feedback);
 
         setTimeout(() => {

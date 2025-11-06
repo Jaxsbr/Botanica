@@ -103,3 +103,23 @@ export interface ShopItem {
     unlocked: boolean; // For future unlock system
 }
 
+// Inventory system types
+
+export interface InventoryItem {
+    itemId: string;
+    quantity: number;
+    category: ShopCategory;
+}
+
+export interface InventorySaveData {
+    items: InventoryItem[];
+    lastSaved: number;
+}
+
+// Purchase system types
+
+export interface PurchaseResult {
+    success: boolean;
+    message: string;
+}
+

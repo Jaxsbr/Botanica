@@ -21,12 +21,12 @@ export class ShopPodule extends BasePodule {
     private shopUI: ShopCategoryUI;
     private elapsedTime: number = 0;
 
-    constructor(config: PoduleConfig, camera: THREE.Camera) {
+    constructor(config: PoduleConfig, camera: THREE.Camera, shopUI: ShopCategoryUI) {
         // Shop podule uses larger size (8.0 radius) for spacious nursery
         super('shop', config, 8.0);
 
         // Initialize UI and managers
-        this.shopUI = new ShopCategoryUI();
+        this.shopUI = shopUI;
         this.hotspotManager = new HotspotManager(camera);
 
         // Wire up hotspot clicks to show shop UI
@@ -36,9 +36,12 @@ export class ShopPodule extends BasePodule {
             this.hotspotManager.setEnabled(false);
         });
 
-        // Re-enable hotspots when shop UI closes
+        // Re-enable hotspots when shop UI closes (but only if podule is active)
         this.shopUI.onClose(() => {
-            this.hotspotManager.setEnabled(true);
+            // Only re-enable if this podule is currently active
+            if (this.isActive) {
+                this.hotspotManager.setEnabled(true);
+            }
         });
 
         // Create ground plane
@@ -340,13 +343,25 @@ export class ShopPodule extends BasePodule {
         this.hotspotManager.update(deltaTime);
     }
 
+    /**
+     * Enable or disable hotspot interaction
+     * (Used to prevent click-through when overlays are open)
+     */
+    public setHotspotsEnabled(enabled: boolean): void {
+        this.hotspotManager.setEnabled(enabled);
+    }
+
     protected onActivate(): void {
         console.log('🛒 Plant nursery activated');
-        // Hotspots are always visible, shop UI opens on click
+        // Enable hotspots when entering shop
+        this.hotspotManager.setEnabled(true);
     }
 
     protected onDeactivate(): void {
         console.log('🛒 Plant nursery deactivated');
+        // Disable hotspots when leaving shop to prevent click-through
+        this.hotspotManager.setEnabled(false);
+
         // Hide shop UI if it's open
         if (this.shopUI.getIsVisible()) {
             this.shopUI.hide();
@@ -361,7 +376,7 @@ export class ShopPodule extends BasePodule {
 
         this.plants.forEach(plant => plant.dispose());
         this.hotspotManager.dispose();
-        this.shopUI.dispose();
+        // Note: shopUI is not disposed here - managed by main.ts
     }
 }
 

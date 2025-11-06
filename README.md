@@ -8,9 +8,9 @@ Botanica is a **digital hobby** that combines deep horticultural systems with ac
 
 This is not a game to "beat" - it's something you check on for 10-20 minute sessions, make decisions, watch progress, and return to later. Like real gardening, success comes from understanding interconnected systems and patient observation.
 
-## Current Status: Phase 1.1 Complete ✅ → Moving to Phase 1.2
+## Current Status: Phase 1.2 Complete ✅ → Moving to Phase 1.3
 
-The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene) is complete with grass ground, paver tiles, and pot container system fully functional.
+The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene) and Phase 1.2 (Core Economy) are complete with functional shop, economy, inventory, and purchase systems fully operational.
 
 ### Getting Started
 
@@ -45,9 +45,12 @@ npm run build
 - ✅ **Hotspot System** - Click zones for product categories
 - ✅ **Shop UI Overlay** - Filtered item display by category
 - ✅ **Mock Item Catalog** - Tools, pots, fertilizers, soil products
-- ⏳ Money tracking system (economy integration)
-- ⏳ Functional purchases (economy integration)
-- ⏳ Inventory system (economy integration)
+- ✅ **Economy System** - Money tracking with earn/spend, localStorage persistence
+- ✅ **Money Display UI** - Top-right balance display with flash animations
+- ✅ **Inventory System** - Track owned items with localStorage persistence
+- ✅ **Purchase System** - Shop-to-economy-to-inventory flow complete
+- ✅ **Inventory UI** - Modal overlay with category filtering and item display
+- ✅ **Functional Purchases** - Buy items, track quantities, disable re-purchase of tools/pots
 
 **Upcoming Phases:**
 - ⏳ Phase 1.3 - Soil & Water (NPK, pH, drainage, watering)
@@ -62,7 +65,11 @@ npm run build
 2. **Explore the Plant Nursery** - Rotate camera to view the indoor building and outdoor plant displays
 3. **Click Hotspots** - Hover over glowing green zones to highlight them, click to browse that category
 4. **Browse Shop Items** - View tools, pots, fertilizers, and soil products with prices and descriptions
-5. **Mock Purchases** - Click "Buy" buttons to see purchase feedback (no economy integration yet)
+5. **Track Your Money** - See your balance ($100 starting) in the top-right corner with flash animations
+6. **Purchase Items** - Click "Buy" buttons to spend money and add items to your inventory
+7. **View Inventory** - Click the backpack icon (🎒) in the navigation bar to see all owned items
+8. **Filter Inventory** - Use category tabs to filter your items (All, Tools, Pots, Fertilizers, Soil)
+9. **Smart Purchases** - Tools/pots can only be bought once (button disables), consumables can be bought multiple times
 
 ## Core Concept
 
@@ -187,8 +194,11 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 src/
 ├── scene/            # Scene, Camera, Lighting
 ├── podules/          # Podule system (BasePodule, Manager, Home, Shop)
-├── ui/               # NavigationUI, TransitionOverlay, ShopCategoryUI
+├── ui/               # NavigationUI, TransitionOverlay, ShopCategoryUI, MoneyDisplay, InventoryUI
 ├── shop/             # Hotspot system, ShopItems catalog, HotspotManager
+├── economy/          # Economy system (money tracking, persistence)
+├── inventory/        # Inventory system (item tracking, persistence)
+├── systems/          # PurchaseSystem (shop-economy-inventory bridge)
 ├── environment/      # PoduleDome, GrassGround, Pavers
 ├── containers/       # Pot system for plants
 ├── plants/           # Plant3D system, genetics, presets
@@ -232,6 +242,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Phase 1.2 In Progress 🚧 | **Latest**: Podule navigation system implemented | **Next**: Money tracking & shop UI 🚀  
+**Status**: Phase 1.2 Complete ✅ → Moving to Phase 1.3 | **Latest**: Full inventory system with purchases, tracking & UI complete | **Next**: Soil & Water systems (NPK, pH, watering) 🚀  
 **Repository**: https://github.com/Jaxsbr/Botanica.git  
 **Documentation**: See `/docs` directory for complete specifications
