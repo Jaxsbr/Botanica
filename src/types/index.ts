@@ -137,7 +137,7 @@ export interface IClickable {
      * @returns true if click was handled, false otherwise
      */
     handleClick(mouse: THREE.Vector2, camera: THREE.Camera): boolean;
-    
+
     /**
      * Handle mouse move for hover effects
      * @param mouse - Normalized mouse coords (-1 to 1)

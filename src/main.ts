@@ -105,7 +105,7 @@ class Botanica {
         // Wire up inventory button with overlay awareness
         this.navigationUI.onInventoryClick(() => {
             const isNowVisible = this.inventoryUI.toggle();
-            
+
             // Register/unregister overlay to block podule input
             if (isNowVisible) {
                 this.inputManager.registerOverlay('inventory');

@@ -358,7 +358,7 @@ export class ShopPodule extends BasePodule implements IClickable {
 
     protected onDeactivate(): void {
         console.log('🛒 Plant nursery deactivated');
-        
+
         // Hide shop UI if it's open
         if (this.shopUI.getIsVisible()) {
             this.shopUI.hide();

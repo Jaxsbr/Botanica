@@ -13,7 +13,7 @@ export class InputManager {
     private mouse: THREE.Vector2;
     private mouseDownPos: { x: number; y: number } | null = null;
     private activeOverlays: Set<string> = new Set();
-    
+
     // Bind methods to preserve 'this' context
     private boundMouseMove: (event: MouseEvent) => void;
     private boundMouseDown: (event: MouseEvent) => void;
@@ -24,7 +24,7 @@ export class InputManager {
         private camera: THREE.Camera
     ) {
         this.mouse = new THREE.Vector2();
-        
+
         // Bind methods
         this.boundMouseMove = this.onMouseMove.bind(this);
         this.boundMouseDown = this.onMouseDown.bind(this);
@@ -38,7 +38,7 @@ export class InputManager {
         window.addEventListener('mousemove', this.boundMouseMove);
         window.addEventListener('mousedown', this.boundMouseDown);
         window.addEventListener('mouseup', this.boundMouseUp);
-        
+
         console.log('🎮 InputManager initialized');
     }
 
@@ -49,7 +49,7 @@ export class InputManager {
         window.removeEventListener('mousemove', this.boundMouseMove);
         window.removeEventListener('mousedown', this.boundMouseDown);
         window.removeEventListener('mouseup', this.boundMouseUp);
-        
+
         console.log('🎮 InputManager disposed');
     }
 
@@ -135,8 +135,8 @@ export class InputManager {
      * Type guard to check if podule implements IClickable
      */
     private isClickable(podule: any): podule is IClickable {
-        return typeof podule.handleClick === 'function' && 
-               typeof podule.handleMouseMove === 'function';
+        return typeof podule.handleClick === 'function' &&
+            typeof podule.handleMouseMove === 'function';
     }
 }
 
