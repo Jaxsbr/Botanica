@@ -329,10 +329,7 @@ canvas {
     background: rgba(244, 67, 54, 0.9);
 }
 
-/* Inventory Button */
-.nav-button.inventory-button {
-    /* Inventory button uses default nav-button styling */
-}
+/* Inventory Button uses default nav-button styling */
 
 /* Inventory Modal */
 .inventory-modal {

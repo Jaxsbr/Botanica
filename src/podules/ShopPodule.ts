@@ -4,15 +4,17 @@ import { Plant3D } from '../plants/Plant3D';
 import { ShopHotspot } from '../shop/Hotspot';
 import { HotspotManager } from '../shop/HotspotManager';
 import { ShopCategoryUI } from '../ui/ShopCategoryUI';
-import type { PoduleConfig } from '../types';
+import type { PoduleConfig, IClickable } from '../types';
 
 /**
  * ShopPodule - Interactive plant nursery with 3D environment and hotspots
  * 
  * Creates an immersive nursery scene with indoor building, outdoor covered area,
  * product displays, and interactive hotspots for browsing shop categories.
+ * 
+ * Implements IClickable to receive input from InputManager.
  */
-export class ShopPodule extends BasePodule {
+export class ShopPodule extends BasePodule implements IClickable {
     private groundPlane: THREE.Mesh;
     private building!: THREE.Group;
     private outdoorArea!: THREE.Group;
@@ -28,21 +30,6 @@ export class ShopPodule extends BasePodule {
         // Initialize UI and managers
         this.shopUI = shopUI;
         this.hotspotManager = new HotspotManager(camera);
-
-        // Wire up hotspot clicks to show shop UI
-        this.hotspotManager.onClick((category) => {
-            this.shopUI.show(category);
-            // Disable hotspots while overlay is open to prevent click-through
-            this.hotspotManager.setEnabled(false);
-        });
-
-        // Re-enable hotspots when shop UI closes (but only if podule is active)
-        this.shopUI.onClose(() => {
-            // Only re-enable if this podule is currently active
-            if (this.isActive) {
-                this.hotspotManager.setEnabled(true);
-            }
-        });
 
         // Create ground plane
         const geometry = new THREE.CircleGeometry(this.radius * 0.95, 32);
@@ -327,11 +314,31 @@ export class ShopPodule extends BasePodule {
         );
         this.hotspotManager.addHotspot(outdoorPlantsHotspot);
 
-        // Add all hotspot groups to scene (initially invisible until podule is activated)
+        // Add all hotspot groups to scene
         this.hotspotManager.getHotspotGroups().forEach(group => {
-            group.visible = false; // Start invisible
             this.group.add(group);
         });
+    }
+
+    /**
+     * Implement IClickable: Handle mouse click
+     */
+    public handleClick(mouse: THREE.Vector2, _camera: THREE.Camera): boolean {
+        const category = this.hotspotManager.checkClick(mouse);
+        if (category) {
+            this.shopUI.show(category);
+            return true; // Click handled
+        }
+        return false; // Click not handled
+    }
+
+    /**
+     * Implement IClickable: Handle mouse move for hover effects
+     */
+    public handleMouseMove(mouse: THREE.Vector2, _camera: THREE.Camera): void {
+        const hoveredHotspot = this.hotspotManager.checkHover(mouse);
+        // Update cursor based on hover state
+        document.body.style.cursor = hoveredHotspot ? 'pointer' : 'default';
     }
 
     public update(deltaTime: number): void {
@@ -344,32 +351,13 @@ export class ShopPodule extends BasePodule {
         this.hotspotManager.update(deltaTime);
     }
 
-    /**
-     * Enable or disable hotspot interaction
-     * (Used to prevent click-through when overlays are open)
-     */
-    public setHotspotsEnabled(enabled: boolean): void {
-        this.hotspotManager.setEnabled(enabled);
-    }
-
     protected onActivate(): void {
         console.log('🛒 Plant nursery activated');
-        // Enable hotspots when entering shop
-        this.hotspotManager.setEnabled(true);
-        // Make all hotspot groups visible
-        this.hotspotManager.getHotspotGroups().forEach(group => {
-            group.visible = true;
-        });
+        // Input will now be routed through InputManager automatically
     }
 
     protected onDeactivate(): void {
         console.log('🛒 Plant nursery deactivated');
-        // Disable hotspots when leaving shop to prevent click-through
-        this.hotspotManager.setEnabled(false);
-        // Make all hotspot groups invisible to prevent raycasting
-        this.hotspotManager.getHotspotGroups().forEach(group => {
-            group.visible = false;
-        });
         
         // Hide shop UI if it's open
         if (this.shopUI.getIsVisible()) {

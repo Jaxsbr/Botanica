@@ -11,6 +11,7 @@ import { Economy } from './economy/Economy';
 import { MoneyDisplay } from './ui/MoneyDisplay';
 import { Inventory } from './inventory/Inventory';
 import { PurchaseSystem } from './systems/PurchaseSystem';
+import { InputManager } from './systems/InputManager';
 import { ShopCategoryUI } from './ui/ShopCategoryUI';
 import { InventoryUI } from './ui/InventoryUI';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
@@ -22,6 +23,7 @@ class Botanica {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     private lightingManager: LightingManager;
     private poduleManager: PoduleManager;
+    private inputManager: InputManager;
     private navigationUI: NavigationUI;
     private transitionOverlay: TransitionOverlay;
     private economy: Economy;
@@ -88,6 +90,10 @@ class Botanica {
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);
 
+        // Initialize InputManager after podule manager
+        this.inputManager = new InputManager(this.poduleManager, this.cameraManager.camera);
+        this.inputManager.init();
+
         // Wire up navigation
         this.navigationUI.onClick(async (type) => {
             await this.transitionOverlay.fadeOut();
@@ -96,21 +102,21 @@ class Botanica {
             await this.transitionOverlay.fadeIn();
         });
 
-        // Wire up inventory button - disable shop hotspots when inventory opens
+        // Wire up inventory button with overlay awareness
         this.navigationUI.onInventoryClick(() => {
             const isNowVisible = this.inventoryUI.toggle();
-
-            // Disable shop hotspots when inventory opens to prevent click-through
+            
+            // Register/unregister overlay to block podule input
             if (isNowVisible) {
-                shopPodule.setHotspotsEnabled(false);
+                this.inputManager.registerOverlay('inventory');
+            } else {
+                this.inputManager.unregisterOverlay('inventory');
             }
         });
 
-        // Re-enable shop hotspots when inventory closes (if shop is active)
+        // Also handle inventory close via other methods (ESC, click outside)
         this.inventoryUI.onClose(() => {
-            if (shopPodule.isActive) {
-                shopPodule.setHotspotsEnabled(true);
-            }
+            this.inputManager.unregisterOverlay('inventory');
         });
 
         // Start with home podule
@@ -140,6 +146,7 @@ class Botanica {
     };
 
     public dispose(): void {
+        this.inputManager.dispose(); // Clean up input listeners first!
         this.sceneManager.dispose();
         this.cameraManager.dispose();
         this.poduleManager.dispose();

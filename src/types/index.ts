@@ -123,3 +123,26 @@ export interface PurchaseResult {
     message: string;
 }
 
+// Input system types
+
+/**
+ * Interface for podules that need to handle mouse input
+ * Podules implementing this will receive input events from InputManager
+ */
+export interface IClickable {
+    /**
+     * Handle mouse click at normalized coordinates
+     * @param mouse - Normalized mouse coords (-1 to 1)
+     * @param camera - Current camera for raycasting
+     * @returns true if click was handled, false otherwise
+     */
+    handleClick(mouse: THREE.Vector2, camera: THREE.Camera): boolean;
+    
+    /**
+     * Handle mouse move for hover effects
+     * @param mouse - Normalized mouse coords (-1 to 1)
+     * @param camera - Current camera for raycasting
+     */
+    handleMouseMove(mouse: THREE.Vector2, camera: THREE.Camera): void;
+}
+

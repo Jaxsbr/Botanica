@@ -3,28 +3,20 @@ import { ShopHotspot } from './Hotspot';
 import type { ShopCategory } from '../types';
 
 /**
- * HotspotManager - Manages all shop hotspots and handles interaction
+ * HotspotManager - Manages all shop hotspots (NO global listeners)
  * 
- * Handles raycasting for mouse hover/click detection and coordinates
- * between multiple hotspots in the shop scene.
+ * Handles raycasting for mouse hover/click detection.
+ * Input is routed through InputManager, not global listeners.
  */
 export class HotspotManager {
     private hotspots: ShopHotspot[] = [];
     private raycaster: THREE.Raycaster;
-    private mouse: THREE.Vector2;
     private camera: THREE.Camera;
     private currentHovered: ShopHotspot | null = null;
-    private clickCallback?: (category: ShopCategory) => void;
-    private mouseDownPos: { x: number; y: number } | null = null;
-    private enabled: boolean = true;
 
     constructor(camera: THREE.Camera) {
         this.camera = camera;
         this.raycaster = new THREE.Raycaster();
-        this.mouse = new THREE.Vector2();
-
-        // Set up event listeners
-        this.setupEventListeners();
     }
 
     /**
@@ -32,11 +24,6 @@ export class HotspotManager {
      */
     public addHotspot(hotspot: ShopHotspot): void {
         this.hotspots.push(hotspot);
-
-        // If callback is already set, apply it to this new hotspot
-        if (this.clickCallback) {
-            hotspot.onClick(this.clickCallback);
-        }
     }
 
     /**
@@ -47,92 +34,12 @@ export class HotspotManager {
     }
 
     /**
-     * Set the callback for when a hotspot is clicked
+     * Check which hotspot is hovered at the given mouse coordinates
+     * Returns the hovered hotspot or null
      */
-    public onClick(callback: (category: ShopCategory) => void): void {
-        this.clickCallback = callback;
-        // Also set on individual hotspots
-        this.hotspots.forEach(hotspot => {
-            hotspot.onClick(callback);
-        });
-    }
-
-    /**
-     * Enable or disable hotspot interaction
-     * (Used to prevent clicking through shop overlay)
-     */
-    public setEnabled(enabled: boolean): void {
-        this.enabled = enabled;
-
-        // Clear hover state when disabling
-        if (!enabled && this.currentHovered) {
-            this.currentHovered.onHoverExit();
-            this.currentHovered = null;
-            document.body.style.cursor = 'default';
-        }
-    }
-
-    /**
-     * Set up mouse event listeners
-     */
-    private setupEventListeners(): void {
-        // Mouse move for hover detection
-        window.addEventListener('mousemove', (event) => {
-            // Normalize mouse coordinates (-1 to +1)
-            this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            this.updateHover();
-
-            // Change cursor on hover
-            if (this.currentHovered) {
-                document.body.style.cursor = 'pointer';
-            } else {
-                document.body.style.cursor = 'default';
-            }
-        });
-
-        // Track mouse down position to differentiate click from drag
-        window.addEventListener('mousedown', (event) => {
-            this.mouseDownPos = { x: event.clientX, y: event.clientY };
-        });
-
-        // Only trigger click if mouse hasn't moved much (not a drag)
-        window.addEventListener('mouseup', (event) => {
-            if (!this.mouseDownPos) return;
-
-            // Skip if disabled
-            if (!this.enabled) {
-                this.mouseDownPos = null;
-                return;
-            }
-
-            // Calculate distance moved
-            const dx = event.clientX - this.mouseDownPos.x;
-            const dy = event.clientY - this.mouseDownPos.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            // If moved less than 5 pixels, treat as click (not drag)
-            if (distance < 5 && this.currentHovered) {
-                console.log('🔥 Hotspot clicked:', this.currentHovered.category);
-                this.currentHovered.handleClick();
-            }
-
-            this.mouseDownPos = null;
-        });
-    }
-
-    /**
-     * Update hover state based on raycasting
-     */
-    private updateHover(): void {
-        // Skip if disabled
-        if (!this.enabled) {
-            return;
-        }
-
+    public checkHover(mouse: THREE.Vector2): ShopHotspot | null {
         // Update raycaster
-        this.raycaster.setFromCamera(this.mouse, this.camera);
+        this.raycaster.setFromCamera(mouse, this.camera);
 
         // Get all hotspot meshes
         const hotspotMeshes = this.hotspots.map(h => h.getMesh());
@@ -155,13 +62,44 @@ export class HotspotManager {
                 this.currentHovered = hotspot;
                 this.currentHovered.onHoverEnter();
             }
+
+            return this.currentHovered;
         } else {
             // No intersection - clear hover
             if (this.currentHovered) {
                 this.currentHovered.onHoverExit();
                 this.currentHovered = null;
             }
+            return null;
         }
+    }
+
+    /**
+     * Check which hotspot is clicked at the given mouse coordinates
+     * Returns the clicked hotspot's category or null
+     */
+    public checkClick(mouse: THREE.Vector2): ShopCategory | null {
+        // Update raycaster
+        this.raycaster.setFromCamera(mouse, this.camera);
+
+        // Get all hotspot meshes
+        const hotspotMeshes = this.hotspots.map(h => h.getMesh());
+
+        // Check intersections
+        const intersects = this.raycaster.intersectObjects(hotspotMeshes);
+
+        if (intersects.length > 0) {
+            // Find which hotspot was hit
+            const hitMesh = intersects[0].object as THREE.Mesh;
+            const hotspot = this.hotspots.find(h => h.getMesh() === hitMesh);
+
+            if (hotspot) {
+                console.log('🔥 Hotspot clicked:', hotspot.category);
+                return hotspot.category;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -175,12 +113,14 @@ export class HotspotManager {
      * Clean up resources
      */
     public dispose(): void {
+        // Clear hover state
+        if (this.currentHovered) {
+            this.currentHovered.onHoverExit();
+            this.currentHovered = null;
+        }
+
         this.hotspots.forEach(hotspot => hotspot.dispose());
         this.hotspots = [];
-
-        // Remove event listeners
-        window.removeEventListener('mousemove', this.updateHover);
-        window.removeEventListener('click', () => { });
     }
 }
 
