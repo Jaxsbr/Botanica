@@ -3,18 +3,19 @@
  * 
  * Tracks NPK nutrients, pH, drainage, and water levels for individual pots.
  * Water depletes over time based on drainage type.
- * NPK and pH are static until Phase 1.4 (plant growth).
+ * NPK nutrients are consumed by growing plants.
  */
 
+import { TimeManager } from './TimeManager';
 import type { DrainageType, SoilStats, SoilSaveData } from '../types';
 
 export class Soil {
-    // NPK nutrients (static until Phase 1.4)
+    // NPK nutrients (consumed by growing plants)
     private nitrogen: number = 50;      // 0-100
     private phosphorus: number = 50;    // 0-100
     private potassium: number = 50;     // 0-100
 
-    // pH level (static until Phase 1.4)
+    // pH level (can be adjusted with lime/sulfur)
     private pH: number = 7.0;          // 4.0-9.0 scale
 
     // Drainage type affects water capacity and depletion rate
@@ -24,6 +25,9 @@ export class Soil {
     private waterLevel: number = 80;   // 0-100%
     private maxWater: number = 100;    // Based on drainage type
     private lastWateredTime: number = Date.now(); // Track when last watered
+
+    // Time manager for realistic depletion rates
+    private timeManager: TimeManager;
 
     // Water depletion rates per second (converted from per minute)
     private readonly DEPLETION_RATES = {
@@ -49,6 +53,7 @@ export class Soil {
 
     constructor(drainage: DrainageType = 'medium') {
         this.drainage = drainage;
+        this.timeManager = TimeManager.getInstance();
         this.updateMaxWater();
     }
 
@@ -83,12 +88,15 @@ export class Soil {
 
     /**
      * Update soil state - depletes water over time
-     * @param deltaTime - Time since last update in seconds
+     * @param deltaTime - Time since last update in seconds (before time multiplier)
      */
     public update(deltaTime: number): void {
+        // Apply time multiplier
+        const adjustedDelta = this.timeManager.applyMultiplier(deltaTime);
+
         // Deplete water based on drainage type
         const depletionRate = this.DEPLETION_RATES[this.drainage];
-        const depletion = depletionRate * deltaTime;
+        const depletion = depletionRate * adjustedDelta;
         this.waterLevel = Math.max(0, this.waterLevel - depletion);
     }
 
@@ -190,6 +198,30 @@ export class Soil {
     public setDrainage(type: DrainageType): void {
         this.drainage = type;
         this.updateMaxWater();
+    }
+
+    /**
+     * Consume NPK nutrients (called by growing plants)
+     * @param n - Nitrogen to consume (0-100)
+     * @param p - Phosphorus to consume (0-100)
+     * @param k - Potassium to consume (0-100)
+     */
+    public consumeNPK(n: number, p: number, k: number): void {
+        this.nitrogen = Math.max(0, this.nitrogen - n);
+        this.phosphorus = Math.max(0, this.phosphorus - p);
+        this.potassium = Math.max(0, this.potassium - k);
+    }
+
+    /**
+     * Add NPK nutrients (from fertilizer application)
+     * @param n - Nitrogen to add (0-100)
+     * @param p - Phosphorus to add (0-100)
+     * @param k - Potassium to add (0-100)
+     */
+    public addNPK(n: number, p: number, k: number): void {
+        this.nitrogen = Math.min(100, this.nitrogen + n);
+        this.phosphorus = Math.min(100, this.phosphorus + p);
+        this.potassium = Math.min(100, this.potassium + k);
     }
 
     /**

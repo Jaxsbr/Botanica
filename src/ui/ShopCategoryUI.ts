@@ -34,6 +34,12 @@ export class ShopCategoryUI {
         const container = document.createElement('div');
         container.className = 'shop-category-overlay';
         container.style.display = 'none';
+
+        // Prevent clicks from passing through to 3D world
+        container.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
         return container;
     }
 

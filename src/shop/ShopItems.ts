@@ -160,7 +160,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         unlocked: true
     },
 
-    // Outdoor Plants (Phase 2 - locked for now)
+    // Outdoor Plants (Phase 1.3.2 - unlocked for starter)
     {
         id: 'plant-young-avocado',
         name: 'Young Avocado Plant',
@@ -168,7 +168,7 @@ export const SHOP_ITEMS: ShopItem[] = [
         category: 'outdoor-plants',
         description: 'Skip seed phase, ready to grow',
         icon: '🌱',
-        unlocked: false
+        unlocked: true // Starter item - available from beginning
     },
     {
         id: 'plant-mature-avocado',

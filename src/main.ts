@@ -15,6 +15,10 @@ import { InputManager } from './systems/InputManager';
 import { ShopCategoryUI } from './ui/ShopCategoryUI';
 import { InventoryUI } from './ui/InventoryUI';
 import { PlantInspectionUI } from './ui/PlantInspectionUI';
+import { TutorialOverlay } from './ui/TutorialOverlay';
+import { TutorialSystem } from './systems/TutorialSystem';
+import { TimeControlsUI } from './ui/TimeControlsUI';
+import { DebugCommands } from './systems/DebugCommands';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
 
 class Botanica {
@@ -34,6 +38,10 @@ class Botanica {
     private shopUI: ShopCategoryUI;
     private inventoryUI: InventoryUI;
     private plantInspectionUI: PlantInspectionUI;
+    private tutorialOverlay: TutorialOverlay;
+    private tutorialSystem: TutorialSystem;
+    private timeControlsUI: TimeControlsUI;
+    private debugCommands: DebugCommands;
     private deltaTime: number = 0.0005; // Time delta for animations
 
     constructor() {
@@ -72,13 +80,22 @@ class Botanica {
         this.inventory = new Inventory();
         this.purchaseSystem = new PurchaseSystem(this.economy, this.inventory);
 
-        // Initialize UI
+        // Initialize tutorial system
+        this.tutorialSystem = TutorialSystem.getInstance();
+
+        // Give starter items to new players
+        if (!this.tutorialSystem.isCompleted()) {
+            this.inventory.initializeStarterItems();
+        }
+
+        // Initialize UI (note: InputManager not yet created, will be created next)
         this.moneyDisplay = new MoneyDisplay();
         this.shopUI = new ShopCategoryUI(this.purchaseSystem, this.inventory);
         this.inventoryUI = new InventoryUI(this.inventory);
         this.plantInspectionUI = new PlantInspectionUI(this.inventory);
         this.transitionOverlay = new TransitionOverlay(300);
         this.navigationUI = new NavigationUI();
+        this.timeControlsUI = new TimeControlsUI();
 
         // Wire up economy to money display
         this.economy.subscribe((money) => this.moneyDisplay.update(money));
@@ -86,16 +103,19 @@ class Botanica {
         // Initialize podule system
         this.poduleManager = new PoduleManager(this.sceneManager.scene);
 
+        // Initialize InputManager (before creating podules that need it)
+        this.inputManager = new InputManager(this.poduleManager, this.cameraManager.camera);
+        this.inputManager.init();
+
+        // Create TutorialOverlay now that InputManager exists
+        this.tutorialOverlay = new TutorialOverlay(this.inputManager);
+
         // Create podules
-        const homePodule = new HomePodule(poduleConfig, this.inventory, this.plantInspectionUI);
+        const homePodule = new HomePodule(poduleConfig, this.inventory, this.plantInspectionUI, this.inputManager);
         const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI);
 
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);
-
-        // Initialize InputManager after podule manager
-        this.inputManager = new InputManager(this.poduleManager, this.cameraManager.camera);
-        this.inputManager.init();
 
         // Wire up navigation
         this.navigationUI.onClick(async (type) => {
@@ -139,6 +159,10 @@ class Botanica {
         this.poduleManager.switchToPodule('home');
         this.navigationUI.setActive('home');
 
+        // Initialize debug commands (keyboard shortcuts for development)
+        this.debugCommands = DebugCommands.getInstance();
+        this.debugCommands.init();
+
         // Start animation loop
         this.animate();
 
@@ -163,6 +187,7 @@ class Botanica {
 
     public dispose(): void {
         this.inputManager.dispose(); // Clean up input listeners first!
+        this.debugCommands.dispose(); // Clean up debug keyboard listeners
         this.sceneManager.dispose();
         this.cameraManager.dispose();
         this.poduleManager.dispose();
@@ -172,6 +197,7 @@ class Botanica {
         this.shopUI.dispose();
         this.inventoryUI.dispose();
         this.plantInspectionUI.dispose();
+        this.timeControlsUI.dispose();
     }
 
     /**
@@ -187,6 +213,10 @@ class Botanica {
 
     public getPurchaseSystem(): PurchaseSystem {
         return this.purchaseSystem;
+    }
+
+    public getTutorialSystem(): TutorialSystem {
+        return this.tutorialSystem;
     }
 }
 

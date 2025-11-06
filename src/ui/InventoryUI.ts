@@ -40,8 +40,9 @@ export class InventoryUI {
         container.className = 'inventory-modal';
         container.style.display = 'none';
 
-        // Click outside to close
+        // Click outside to close, and stop propagation to prevent 3D world clicks
         container.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent clicks from reaching 3D world
             if (e.target === container) {
                 this.hide();
             }

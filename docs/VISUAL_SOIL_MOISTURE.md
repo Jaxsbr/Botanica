@@ -379,3 +379,4 @@ Players learn real horticultural concepts:
 
 **Key Takeaway**: Without moisture meters, players must combine visual cues with time tracking and knowledge of drainage behavior. Moisture meters reveal the truth and enable optimal plant care.
 
+

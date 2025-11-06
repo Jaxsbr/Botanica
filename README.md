@@ -8,9 +8,18 @@ Botanica is a **digital hobby** that combines deep horticultural systems with ac
 
 This is not a game to "beat" - it's something you check on for 10-20 minute sessions, make decisions, watch progress, and return to later. Like real gardening, success comes from understanding interconnected systems and patient observation.
 
-## Current Status: Phase 1.3 Complete ✅ → Moving to Phase 1.4
+## Current Status: Phase 1.4 In Progress 🚀
 
-The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene), Phase 1.2 (Core Economy), and Phase 1.3 (Soil & Water) are complete with functional soil chemistry, water depletion, and plant inspection systems fully operational.
+The project has successfully transitioned from simple terrarium concept to a backyard gardening simulation inside a glass dome. Full 3D plant rendering is implemented via Plant3D/ez-tree. Phase 1.1 (Foundation & Scene), Phase 1.2 (Core Economy), Phase 1.3 (Soil & Water), Phase 1.3.1 (Tutorial & Starter Items), and Phase 1.3.2 (Planting Mechanics) are complete!
+
+**Phase 1.4 Core Systems Implemented:**
+- ✅ TimeManager singleton with time speed controls (pause, 1x, 5x, 10x)
+- ✅ TimeControlsUI for player time control
+- ✅ PlantLifecycle system with 6 growth stages
+- ✅ PlantStagePresets with visual configs per stage
+- ✅ Soil NPK consumption and TimeManager integration
+- ⏳ Growth integration with pots/plants (final step)
+- ⏳ Visual stage transitions and growth progress UI
 
 ### Getting Started
 
@@ -71,8 +80,17 @@ npm run build
 - ✅ **Time Tracking** - Smart "last watered" display (just now, X mins/hours/days ago)
 - ✅ **Soil Persistence** - Save/load soil state with last watered time
 
+**Completed Phases:**
+- ✅ Phase 1.1 - Foundation & Scene
+- ✅ Phase 1.2 - Core Economy
+- ✅ Phase 1.3 - Soil & Water
+- ✅ Phase 1.3.1 - Tutorial & Starter Items
+- ✅ Phase 1.3.2 - Planting Mechanics
+
+**Current Phase:**
+- 🚀 Phase 1.4 - Plant Growth (core systems done, integration in progress)
+
 **Upcoming Phases:**
-- ⏳ Phase 1.4 - Plant Growth (lifecycle stages, time controls)
 - ⏳ Phase 1.5 - Harvest & Income (fruit collection, sales)
 - ⏳ Phase 1.6 - Side Activities (worm digging, composting)
 - ⏳ Phase 1.7 - Light & Polish (sun simulation, UI polish)
@@ -88,11 +106,16 @@ npm run build
 7. **View Inventory** - Click the backpack icon (🎒) in the navigation bar to see all owned items
 8. **Filter Inventory** - Use category tabs to filter your items (All, Tools, Pots, Fertilizers, Soil)
 9. **Smart Purchases** - Tools/pots can only be bought once (button disables), consumables can be bought multiple times
-10. **Inspect Plants** - Click on pots in the home podule to view detailed soil stats
-11. **Monitor Soil Health** - Check water levels, NPK nutrients, pH, and drainage type
-12. **Water Your Plants** - Purchase a watering can ($5), then click "Water Plant" in the inspection UI
-13. **Watch Soil Changes** - Soil color darkens when wet, lightens as it dries over time
-14. **Get Moisture Alerts** - Buy a moisture meter ($15) to see detailed hydration status
+10. **Tutorial System** - New players receive starter items (pot, soil, avocado plant) and step-by-step guidance
+11. **Place Pots** - Click on empty paver stones to place pots from your inventory
+12. **Add Soil** - Click on empty pots to fill them with soil (different types have different drainage)
+13. **Plant Seeds** - Click on soil-filled pots to plant seeds or young plants from your inventory
+14. **Inspect Plants** - Click on planted pots to view detailed soil stats and plant information
+15. **Monitor Soil Health** - Check water levels, NPK nutrients, pH, and drainage type
+16. **Water Your Plants** - Purchase a watering can ($5), then click "Water Plant" in the inspection UI
+17. **Watch Soil Changes** - Soil color darkens when wet, lightens as it dries over time
+18. **Control Time** - Use time controls (bottom-left) to pause, speed up (1x, 5x, 10x), or slow down plant growth and water depletion
+19. **Get Moisture Alerts** - Buy a moisture meter ($25-$50) to see detailed hydration status
 
 ## Core Concept
 
@@ -126,17 +149,32 @@ Phase 1 is broken into 7 manageable sub-phases for iterative development:
 - Transaction system
 - Money display in UI
 
-#### **1.3 - Soil & Water** (Week 2)
+#### **1.3 - Soil & Water** (Complete ✅)
 - Soil chemistry class (NPK, pH, drainage, water)
 - Watering mechanic
 - Visual feedback for soil states
 - Plant inspection UI (show soil stats)
 
-#### **1.4 - Plant Growth** (Week 3)
-- Lifecycle stages (seed → fruiting)
-- Growth tied to soil nutrients + time
-- Visual changes per growth stage
-- Time controls (pause, 1x, 5x, 10x)
+#### **1.3.1 - Tutorial & Starter Items** (Complete ✅)
+- Tutorial system with step-by-step instructions
+- Starter inventory (avocado plant, pot, soil)
+- Tutorial skip for returning players
+- localStorage persistence of tutorial state
+
+#### **1.3.2 - Planting Mechanics** (Complete ✅)
+- Pot placement system (click pavers)
+- Soil application (consume soil from inventory)
+- Plant/seed planting (start lifecycle)
+- Multi-pot support in home podule
+- Save/load pot positions and states
+
+#### **1.4 - Plant Growth** (In Progress 🚀)
+- Lifecycle stages (seed → sprout → seedling → young → mature → fruiting)
+- Growth tied to soil nutrients + water + time
+- Visual stage transitions (hybrid mesh swaps + parameter morphing)
+- Time controls (pause, 1x, 5x, 10x) affecting growth AND water
+- NPK nutrient consumption over time
+- Plant health and visual stress indicators
 
 #### **1.5 - Harvest & Income** (Week 3-4)
 - Fruit generation on mature plants
@@ -272,6 +310,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Status**: Phase 1.3 Complete ✅ → Moving to Phase 1.4 | **Latest**: Full soil chemistry & water management with interactive plant inspection | **Next**: Plant Growth systems (lifecycle stages, time controls) 🚀  
+**Status**: Phase 1.4 In Progress 🚀 | **Latest**: Tutorial system, planting mechanics (pot placement, soil, seeds), time controls, and plant lifecycle systems | **Next**: Complete growth integration and visual transitions 🌱  
 **Repository**: https://github.com/Jaxsbr/Botanica.git  
 **Documentation**: See `/docs` directory for complete specifications

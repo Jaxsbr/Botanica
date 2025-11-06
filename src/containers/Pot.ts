@@ -140,6 +140,7 @@ export class Pot {
         this.soilMesh.position.y = soilY;
         this.soilMesh.receiveShadow = true;
         this.soilMesh.castShadow = false;
+        this.soilMesh.visible = false; // Hide soil by default - only show when soil is added
         this.group.add(this.soilMesh);
 
         // Set initial soil color based on water level
@@ -192,6 +193,38 @@ export class Pot {
 
     public getSoil(): Soil {
         return this.soil;
+    }
+
+    /**
+     * Check if pot has a plant
+     */
+    public hasPlant(): boolean {
+        return this.plant !== null;
+    }
+
+    /**
+     * Get the current plant (if any)
+     */
+    public getPlant(): Plant3D | null {
+        return this.plant;
+    }
+
+    /**
+     * Show the soil mesh (called when soil is added to pot)
+     */
+    public showSoil(): void {
+        if (this.soilMesh) {
+            this.soilMesh.visible = true;
+        }
+    }
+
+    /**
+     * Hide the soil mesh (for empty pots)
+     */
+    public hideSoil(): void {
+        if (this.soilMesh) {
+            this.soilMesh.visible = false;
+        }
     }
 
     /**

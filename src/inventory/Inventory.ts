@@ -199,5 +199,26 @@ export class Inventory {
         this.save();
         console.log('🎒 Inventory reset');
     }
+
+    /**
+     * Initialize starter items for new players
+     * Called when starting tutorial
+     */
+    public initializeStarterItems(): void {
+        // Only initialize if inventory is empty
+        if (this.items.size > 0) {
+            console.log('🎒 Inventory already has items, skipping starter initialization');
+            return;
+        }
+
+        console.log('🎒 Initializing starter items...');
+
+        // Add grandmother's gifts
+        this.addItem('pot-small-terracotta', 'pots', 1);
+        this.addItem('potting-soil', 'soil', 1);
+        this.addItem('plant-young-avocado', 'outdoor-plants', 1);
+
+        console.log('🎒 Starter items added: Small Terracotta Pot, Potting Soil, Young Avocado Plant');
+    }
 }
 
