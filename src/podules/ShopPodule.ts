@@ -327,8 +327,9 @@ export class ShopPodule extends BasePodule {
         );
         this.hotspotManager.addHotspot(outdoorPlantsHotspot);
 
-        // Add all hotspot groups to scene
+        // Add all hotspot groups to scene (initially invisible until podule is activated)
         this.hotspotManager.getHotspotGroups().forEach(group => {
+            group.visible = false; // Start invisible
             this.group.add(group);
         });
     }
@@ -355,13 +356,21 @@ export class ShopPodule extends BasePodule {
         console.log('🛒 Plant nursery activated');
         // Enable hotspots when entering shop
         this.hotspotManager.setEnabled(true);
+        // Make all hotspot groups visible
+        this.hotspotManager.getHotspotGroups().forEach(group => {
+            group.visible = true;
+        });
     }
 
     protected onDeactivate(): void {
         console.log('🛒 Plant nursery deactivated');
         // Disable hotspots when leaving shop to prevent click-through
         this.hotspotManager.setEnabled(false);
-
+        // Make all hotspot groups invisible to prevent raycasting
+        this.hotspotManager.getHotspotGroups().forEach(group => {
+            group.visible = false;
+        });
+        
         // Hide shop UI if it's open
         if (this.shopUI.getIsVisible()) {
             this.shopUI.hide();
