@@ -22,7 +22,7 @@ import { DebugCommands } from './systems/DebugCommands';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
 import { DevPodule } from './podules/DevPodule';
 import { DevPlantConfigurator } from './ui/devtools/DevPlantConfigurator';
-import { PRESETS } from './plants/presets3d';
+import { PLANT_PRESETS } from './plants/abstract/PlantPresets';
 
 class Botanica {
     private sceneManager: SceneManager;
@@ -110,7 +110,7 @@ class Botanica {
         this.transitionOverlay = new TransitionOverlay(300);
         this.navigationUI = new NavigationUI();
         this.timeControlsUI = new TimeControlsUI();
-        this.devConfigurator = new DevPlantConfigurator({ presets: PRESETS });
+        this.devConfigurator = new DevPlantConfigurator({ presets: PLANT_PRESETS });
 
         // Wire up economy to money display
         this.economy.subscribe((money) => this.moneyDisplay.update(money));

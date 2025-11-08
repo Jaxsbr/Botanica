@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { BasePodule } from './BasePodule';
 import { GrassGround } from '../environment/GrassGround';
-import { Plant3D } from '../plants/Plant3D';
-import { PRESETS } from '../plants/presets3d';
-import type { PoduleConfig, Plant3DConfig } from '../types';
+import { AbstractPlant, type AbstractPlantConfig } from '../plants/abstract/AbstractPlant';
+import { PLANT_PRESETS } from '../plants/abstract/PlantPresets';
+import type { PoduleConfig } from '../types';
 import type { DevPlantConfigurator } from '../ui/devtools/DevPlantConfigurator';
+import type { DevPlantConfiguratorChange } from '../ui/devtools/DevPlantConfigurator';
 import { InputManager } from '../systems/InputManager';
 
 /**
@@ -20,9 +21,14 @@ export class DevPodule extends BasePodule {
     private readonly gridMeshes: THREE.Mesh[] = [];
     private paverGeometry: THREE.BoxGeometry | null = null;
     private paverMaterial: THREE.MeshStandardMaterial | null = null;
-    private plant: Plant3D | null = null;
-    private currentConfig: Plant3DConfig;
+    private readonly abstractPlant = new AbstractPlant();
+    private plantMesh: THREE.Group | null = null;
+    private currentConfig: AbstractPlantConfig;
+    private currentGrowthPercent = 50;
+    private autoAnimateGrowth = false;
+    private autoGrowthSpeed = 15;
     private elapsedTime = 0;
+    private lastGeneratedGrowth = -Infinity;
 
     constructor(
         config: PoduleConfig,
@@ -43,20 +49,33 @@ export class DevPodule extends BasePodule {
         this.plantAnchor.scale.setScalar(3.5);
         this.group.add(this.plantAnchor);
 
-        const defaultConfig = PRESETS.sapling ?? {};
-        this.currentConfig = { ...defaultConfig };
-        this.spawnPlant(this.currentConfig);
+        const { config: defaultConfig, key: defaultPresetKey } = getDefaultPreset();
+        this.currentConfig = cloneConfig(defaultConfig);
+        this.spawnPlant();
 
-        this.configurator.setConfig(this.currentConfig, true);
-        this.configurator.setOnConfigChange((config) => {
-            this.applyConfig(config);
+        this.configurator.setConfig(this.currentConfig, this.currentGrowthPercent, true, defaultPresetKey ?? undefined);
+        this.configurator.setOnConfigChange((change) => {
+            this.applyConfiguratorChange(change);
         });
     }
 
     public update(deltaTime: number): void {
         this.elapsedTime += deltaTime;
-        if (this.plant) {
-            this.plant.update(this.elapsedTime);
+        if (!this.autoAnimateGrowth) {
+            return;
+        }
+
+        this.currentGrowthPercent += this.autoGrowthSpeed * deltaTime;
+        if (this.currentGrowthPercent > 100) {
+            this.currentGrowthPercent = this.currentGrowthPercent % 100;
+        }
+        if (this.currentGrowthPercent < 0) {
+            this.currentGrowthPercent = (this.currentGrowthPercent % 100) + 100;
+        }
+
+        if (Math.abs(this.currentGrowthPercent - this.lastGeneratedGrowth) >= 0.5) {
+            this.spawnPlant();
+            this.configurator.setGrowthPercent(this.currentGrowthPercent, true);
         }
     }
 
@@ -78,33 +97,40 @@ export class DevPodule extends BasePodule {
         this.ground.dispose();
     }
 
-    private applyConfig(config: Plant3DConfig): void {
-        this.currentConfig = {
-            ...config,
-            color: config.color
-                ? { ...config.color }
-                : this.currentConfig.color
-        };
-        this.spawnPlant(this.currentConfig);
+    private applyConfiguratorChange(change: DevPlantConfiguratorChange): void {
+        this.currentConfig = cloneConfig(change.config);
+        this.currentGrowthPercent = THREE.MathUtils.clamp(change.growthPercent, 0, 100);
+        this.autoAnimateGrowth = change.autoAnimate;
+        this.autoGrowthSpeed = change.autoSpeed;
+        this.spawnPlant();
     }
 
-    private spawnPlant(config: Plant3DConfig): void {
+    private spawnPlant(): void {
         this.disposePlant();
 
-        this.plant = new Plant3D(config);
-        const mesh = this.plant.getMesh();
+        const mesh = this.abstractPlant.generate(this.currentConfig, this.currentGrowthPercent);
         mesh.position.set(0, 0, 0);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.traverse((object) => {
+            if (object instanceof THREE.Mesh) {
+                object.castShadow = true;
+                object.receiveShadow = true;
+            }
+        });
         this.plantAnchor.add(mesh);
+        this.plantMesh = mesh;
+        this.lastGeneratedGrowth = this.currentGrowthPercent;
     }
 
     private disposePlant(): void {
-        if (this.plant) {
-            this.plant.dispose();
-            this.plant = null;
+        if (this.plantMesh) {
+            if (typeof this.plantMesh.userData?.dispose === 'function') {
+                this.plantMesh.userData.dispose();
+            }
+            this.plantAnchor.remove(this.plantMesh);
+            this.plantMesh = null;
         }
-        this.plantAnchor.clear();
     }
 
     private createPaverGrid(rows: number, cols: number, size: number, gap: number): THREE.Group {
@@ -158,5 +184,62 @@ export class DevPodule extends BasePodule {
             this.paverMaterial = null;
         }
     }
+}
+
+function cloneColor(color: THREE.Color): THREE.Color {
+    return new THREE.Color().copy(color);
+}
+
+function cloneConfig(config: AbstractPlantConfig): AbstractPlantConfig {
+    return {
+        ...config,
+        leafColor: cloneColor(config.leafColor),
+        trunkColor: cloneColor(config.trunkColor),
+        trunkMetallic: config.trunkMetallic ?? 0.2,
+        trunkRoughness: config.trunkRoughness ?? 0.7,
+        branchChildren: config.branchChildren
+            ? { ...config.branchChildren }
+            : undefined,
+        roots: config.roots
+            ? { ...config.roots }
+            : undefined,
+        flowers: config.flowers
+            ? {
+                ...config.flowers,
+                color: cloneColor(config.flowers.color),
+            }
+            : undefined,
+        fruit: config.fruit
+            ? {
+                ...config.fruit,
+                color: cloneColor(config.fruit.color),
+            }
+            : undefined,
+        glow: config.glow
+            ? {
+                ...config.glow,
+                color: cloneColor(config.glow.color),
+            }
+            : undefined,
+        crystals: config.crystals
+            ? {
+                ...config.crystals,
+                color: cloneColor(config.crystals.color),
+                placement: config.crystals.placement ? [...config.crystals.placement] : undefined,
+            }
+            : undefined,
+    };
+}
+
+function getDefaultPreset(): { config: AbstractPlantConfig; key: string | null } {
+    if (PLANT_PRESETS.avocadoSapling) {
+        return { config: PLANT_PRESETS.avocadoSapling, key: 'avocadoSapling' };
+    }
+
+    const fallbackEntry = Object.entries(PLANT_PRESETS)[0];
+    if (!fallbackEntry) {
+        throw new Error('No abstract plant presets available');
+    }
+    return { config: fallbackEntry[1], key: fallbackEntry[0] };
 }
 
