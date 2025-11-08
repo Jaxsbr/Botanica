@@ -8,13 +8,18 @@ export class Pavers {
     private paverPositions: Map<number, THREE.Vector3> = new Map();
 
     constructor(paverCount: number = 9, paverSize: number = 0.8, gap: number = 0.1) {
+        const gridSize = Math.sqrt(paverCount);
+        if (!Number.isInteger(gridSize)) {
+            throw new Error('Paver count must be a perfect square to form a grid.');
+        }
+
         this.group = new THREE.Group();
         this.paverSize = paverSize;
         this.gap = gap;
 
-        // Create a 3x3 grid of paver stones
-        const rows = Math.sqrt(paverCount);
-        const cols = Math.sqrt(paverCount);
+        // Create a grid of paver stones
+        const rows = gridSize;
+        const cols = gridSize;
         const totalSize = (paverSize * cols) + (gap * (cols - 1));
         const startX = -totalSize / 2 + paverSize / 2;
         const startZ = -totalSize / 2 + paverSize / 2;

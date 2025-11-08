@@ -9,7 +9,6 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@dgreenheck/ez-tree": "^1.0.0",
         "three": "^0.167.1"
     },
     "devDependencies": {
