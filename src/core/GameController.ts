@@ -11,6 +11,7 @@ import { GrassPodule } from '../podules/GrassPodule';
 import {
     GameState,
     GridPosition,
+    GrowthPhase,
     Inventory,
     PlantState,
     SoilTile
@@ -18,7 +19,11 @@ import {
 import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
 import { ActionMode, GameUI } from '../ui/GameUI';
-import { InteractionController } from '../input/InteractionController';
+import {
+    HoverTarget,
+    InteractionController
+} from '../input/InteractionController';
+import { CursorIndicator, CursorState } from '../ui/CursorIndicator';
 
 const SOIL_TILE_COST_FRUIT = 5;
 
@@ -33,12 +38,14 @@ export class GameController {
     private readonly plantManager: PlantManager;
     private readonly ui: GameUI;
     private readonly interaction: InteractionController;
+    private readonly cursorIndicator: CursorIndicator;
     private currentMode: ActionMode = 'plant';
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
     private isPlacingTile = false;
     private pendingPlacementPositions: Map<string, GridPosition> = new Map();
+    private hoverTarget: HoverTarget = { type: 'none' };
 
     constructor(containerId: string = 'app') {
         const containerElement = document.getElementById(containerId);
@@ -59,6 +66,7 @@ export class GameController {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderer.shadowMap.enabled = true;
+        this.renderer.domElement.classList.add('game-canvas');
         this.container.appendChild(this.renderer.domElement);
 
         this.gameState = this.createInitialGameState();
@@ -72,6 +80,8 @@ export class GameController {
         this.soilTileManager.initialize();
 
         this.plantManager = new PlantManager(this.scene, this.gameState);
+
+        this.cursorIndicator = new CursorIndicator(this.renderer.domElement);
 
         this.ui = new GameUI({
             onModeChanged: (mode) => this.handleModeChanged(mode),
@@ -99,7 +109,8 @@ export class GameController {
                 onPlantSelected: (plantId) => this.handlePlantInteraction(plantId),
                 onSoilTileSelected: (tileId) => this.handleSoilTileInteraction(tileId),
                 onPlacementPreviewSelected: (tileId) => this.handlePlacementPreview(tileId),
-                onPointerMiss: () => this.handlePointerMiss()
+                onPointerMiss: () => this.handlePointerMiss(),
+                onHoverChanged: (target) => this.handleHoverChanged(target)
             }
         );
 
@@ -108,6 +119,7 @@ export class GameController {
 
         this.handleResize();
         this.start();
+        this.updateCursorState();
     }
 
     public dispose = (): void => {
@@ -194,6 +206,7 @@ export class GameController {
 
     private handleSeedSelection(seedId: string | null): void {
         this.gameState.selectedSeedId = seedId;
+        this.updateCursorState();
     }
 
     private handleModeChanged(mode: ActionMode): void {
@@ -217,6 +230,8 @@ export class GameController {
         if (mode === 'till') {
             this.clearSeedSelection();
         }
+
+        this.updateCursorState();
     }
 
     private handleSoilTileInteraction(tileId: string): void {
@@ -251,6 +266,8 @@ export class GameController {
 
         this.gameState.inventory.seeds[this.gameState.selectedSeedId] = availableSeedCount - 1;
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
+        this.updateCursorState();
+        this.interaction.refreshHover();
     }
 
     private handlePlantInteraction(plantId: string): void {
@@ -259,13 +276,14 @@ export class GameController {
             return;
         }
 
-        this.clearSeedSelection();
+        this.ensurePlantSelection();
         this.cancelSoilPlacement();
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
         if (result.fruitYield > 0) {
             this.ui.triggerFruitPulse();
         }
         this.updateShopUI();
+        this.interaction.refreshHover();
     }
 
     private handleBuySoilTile(): void {
@@ -288,6 +306,8 @@ export class GameController {
         );
         this.soilTileManager.showPlacementPreviews(availablePositions);
         this.updateShopUI();
+        this.updateCursorState();
+        this.interaction.refreshHover();
     }
 
     private handlePlacementPreview(previewTileId: string): void {
@@ -323,14 +343,19 @@ export class GameController {
             );
             this.soilTileManager.showPlacementPreviews(nextPositions);
             this.updateShopUI();
+            this.updateCursorState();
+            this.interaction.refreshHover();
             return;
         }
 
         this.cancelSoilPlacement();
         this.updateShopUI();
+        this.interaction.refreshHover();
     }
 
     private handlePointerMiss(): void {
+        this.setHoverTarget({ type: 'none' });
+
         if (!this.isPlacingTile) {
             return;
         }
@@ -348,6 +373,7 @@ export class GameController {
         );
         this.soilTileManager.showPlacementPreviews(availablePositions);
         this.updateShopUI();
+        this.updateCursorState();
     }
 
     private cancelSoilPlacement(): void {
@@ -359,6 +385,8 @@ export class GameController {
         this.pendingPlacementPositions.clear();
         this.soilTileManager.clearPlacementPreviews();
         this.updateShopUI();
+        this.updateCursorState();
+        this.interaction.refreshHover();
     }
 
     private clearSeedSelection(): void {
@@ -367,6 +395,22 @@ export class GameController {
         }
 
         this.gameState.selectedSeedId = null;
+    }
+
+    private ensurePlantSelection(): void {
+        if (this.currentMode !== 'plant') {
+            return;
+        }
+
+        const selectedSeedId = this.gameState.selectedSeedId;
+        if (selectedSeedId) {
+            const remaining = this.gameState.inventory.seeds[selectedSeedId] ?? 0;
+            if (remaining > 0) {
+                return;
+            }
+        }
+
+        this.gameState.selectedSeedId = this.getNextAvailableSeedId();
     }
 
     private getNextAvailableSeedId(): string | null {
@@ -381,6 +425,7 @@ export class GameController {
 
     private updateInventoryUI(): void {
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
+        this.updateCursorState();
     }
 
     private updateShopUI(): void {
@@ -411,5 +456,52 @@ export class GameController {
             costFruit: SOIL_TILE_COST_FRUIT,
             message
         });
+        this.updateCursorState();
+    }
+
+    private handleHoverChanged(target: HoverTarget): void {
+        this.setHoverTarget(target);
+    }
+
+    private setHoverTarget(target: HoverTarget): void {
+        this.hoverTarget = target;
+        this.updateCursorState();
+    }
+
+    private updateCursorState(): void {
+        let nextState: CursorState = 'default';
+
+        if (this.hoverTarget.type === 'plant') {
+            const plant = this.gameState.plants.get(this.hoverTarget.plantId);
+            if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
+                nextState = 'harvest';
+            } else {
+                nextState = 'plant-disabled';
+            }
+        } else if (this.hoverTarget.type === 'preview') {
+            const canPlace = this.isPlacingTile && this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+            nextState = canPlace ? 'build' : 'build-disabled';
+        } else if (this.hoverTarget.type === 'soil') {
+            if (this.currentMode === 'plant') {
+                const canPlant = this.canPlantOnTile(this.hoverTarget.tile);
+                nextState = canPlant ? 'plant' : 'plant-disabled';
+            }
+        }
+
+        this.cursorIndicator.setState(nextState);
+    }
+
+    private canPlantOnTile(tile: SoilTile): boolean {
+        if (tile.occupiedByPlantId) {
+            return false;
+        }
+
+        if (!this.gameState.selectedSeedId) {
+            return false;
+        }
+
+        const availableSeedCount =
+            this.gameState.inventory.seeds[this.gameState.selectedSeedId] ?? 0;
+        return availableSeedCount > 0;
     }
 }

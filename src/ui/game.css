@@ -183,6 +183,27 @@
     transform: translateY(-50%) translateX(0);
 }
 
+canvas[data-cursor-state='default'] {
+    cursor: default;
+}
+
+canvas[data-cursor-state='harvest'] {
+    cursor: grab;
+}
+
+canvas[data-cursor-state='plant'] {
+    cursor: cell;
+}
+
+canvas[data-cursor-state='plant-disabled'],
+canvas[data-cursor-state='build-disabled'] {
+    cursor: not-allowed;
+}
+
+canvas[data-cursor-state='build'] {
+    cursor: copy;
+}
+
 @media (max-width: 900px) {
     .game-ui__action-dock {
         right: 2.3rem;

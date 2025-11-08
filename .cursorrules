@@ -1,0 +1,124 @@
+# 🎯 Cursor Rules & Interaction Design
+
+## Overview
+This document defines how player cursor interactions behave in the **Botanica Incremental Prototype**.  
+All interaction systems must follow **incremental game best practices**:
+- **Low friction:** Minimize unnecessary clicks and UI travel.  
+- **Clear feedback:** Every action gives immediate, visible, or audible feedback.  
+- **Focus retention:** Player attention stays on the play area.  
+- **Continuous progress:** Player actions should always feel productive.
+
+---
+
+## 🌱 Core Loop Summary
+Players plant seeds, grow plants, harvest fruit and seeds, and spend fruit to expand the garden by placing additional soil tiles.  
+Gameplay alternates between **Planting** and **Building** modes, while **harvesting** is always available.
+
+---
+
+## 🖱️ Cursor Interaction Principles
+
+### 1. Contextual and Reactive
+The cursor always communicates what the player can do:
+- Changes icon based on what’s under the pointer (soil, highlight, ripe plant, etc.).
+- When an action isn’t possible, shows a **disabled cursor**.
+- Will later integrate with disabled icons on action buttons to maintain clarity.
+
+### 2. Single-Click Design
+- All primary actions happen on **single left-click**.  
+- No double-clicks, long-presses, or drag actions are required.
+
+### 3. Harvesting Always Works
+- Clicking a mature plant **always harvests it**, regardless of the current mode.  
+- Harvesting takes priority over other interactions.  
+- Provides immediate feedback (animation, particle, sound).
+
+---
+
+## 🧱 Modes
+
+### 🧩 Build Mode
+- Activated by selecting “Build” or pressing a hotkey (e.g., `B`).
+- Cursor shows a **soil tile** icon.
+- Clicking a **highlighted tile** places soil (if enough fruit).
+- If placement is unavailable, the cursor and action button appear **disabled**.
+- Right-click / `Esc` cancels Build Mode.
+
+### 🌱 Plant Mode
+- Activated by selecting a seed or pressing its assigned hotkey (e.g., `1` for Lumen Bloom).
+- Cursor shows the selected seed icon.
+- Clicking an **empty soil tile** plants the selected seed (if available).  
+- Player can click multiple tiles until seeds run out or mode is canceled.
+- If planting is unavailable (no seed, invalid tile), cursor shows disabled state.
+- Right-click / `Esc` cancels Plant Mode.
+
+---
+
+## 🌾 Harvest Rules
+- Harvesting is always available and overrides the current mode.  
+- Clicking a mature plant:
+  - Harvests fruit and/or seeds instantly.
+  - Triggers harvest feedback animation/sound.
+- No mode switch is required to harvest.
+
+---
+
+## 🧭 Cursor Priority (Hover State)
+When deciding what the cursor should represent or do under the pointer:
+
+| Priority | Condition | Cursor Icon / Action |
+|-----------|------------|----------------------|
+| 1 | Tile contains mature plant | Harvest cursor / harvest on click |
+| 2 | Build Mode active + valid highlight | Build cursor / place soil |
+| 3 | Build Mode active + invalid highlight | Disabled build cursor |
+| 4 | Plant Mode active + valid soil | Plant cursor / plant seed |
+| 5 | Plant Mode active + invalid target or no seeds | Disabled plant cursor |
+
+---
+
+## 🔄 Mode Switching
+- Selecting a new seed automatically switches to its **Plant Mode**.  
+- Selecting “Build” automatically exits any active plant mode.  
+- Canceling (via right-click or `Esc`) returns to **no active mode**, where no actions can be performed until a mode is reactivated.  
+- “No active mode” is **not a gameplay state** — it’s simply a disabled condition, visually communicated via cursor and button states.
+
+---
+
+## 🎮 UX / Feedback Guidelines
+1. **Visual Feedback:** Every click produces visible changes — particles, growth animation, or tile update.  
+2. **Audio Feedback:** Distinct sounds for planting, harvesting, and building.  
+3. **Disabled State Clarity:**  
+   - When an action is unavailable, both the cursor and the corresponding UI button use a “disabled” look.  
+   - Disabled state should clearly communicate *why* the action cannot occur (e.g., no seeds, no fruit, invalid tile).  
+4. **Mode Persistence:**  
+   - Player remains in the active mode until it’s canceled or replaced.  
+   - Prevents repetitive menu clicks.
+
+---
+
+## 🚀 Incremental Game Design Alignment
+All new cursor interactions must:
+- Reduce or remove friction — never add redundant clicks.  
+- Always give feedback (visual and/or audio).  
+- Maintain the feeling of continuous progression.  
+- Avoid introducing extra mode layers unless they enhance automation or scaling.  
+- Support future upgrades like auto-planting, auto-harvesting, or batch placement without breaking core rules.
+
+---
+
+## ✅ Example Flow
+
+1. Player presses `1` → enters **Plant Mode (Lumen Bloom)**.  
+2. Cursor shows Lumen Bloom seed icon.  
+3. Player clicks 3 soil tiles → 3 seeds planted.  
+4. While still in Plant Mode, a ripe plant appears → clicking it harvests instantly.  
+5. Player presses `B` → switches to **Build Mode**.  
+6. Cursor shows soil tile icon.  
+7. Player clicks a highlighted tile → soil placed.  
+8. Player right-clicks → cancels mode; cursor and buttons show disabled states.
+
+---
+
+> ⚙️ **Rule of Thumb:**  
+> Every player click must either perform an action or clearly communicate why it can’t.  
+> Empty or confusing clicks are considered design errors.
