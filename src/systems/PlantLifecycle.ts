@@ -34,6 +34,13 @@ export interface LifecycleState {
     daysAlive: number;          // Track time for display
 }
 
+export interface LifecycleSaveData {
+    stage: LifecycleStage;
+    totalGrowthPoints: number;
+    health: number;
+    daysAlive: number;
+}
+
 export class PlantLifecycle {
     private config: LifecycleConfig;
     private state: LifecycleState;
@@ -47,6 +54,7 @@ export class PlantLifecycle {
         LifecycleStage.MATURE,
         LifecycleStage.FRUITING
     ];
+    private onStageChange?: (stage: LifecycleStage) => void;
 
     constructor(config: LifecycleConfig, soil: Soil, initialStage: LifecycleStage = LifecycleStage.SEED) {
         this.config = config;
@@ -72,12 +80,21 @@ export class PlantLifecycle {
 
         if (adjustedDelta === 0) return; // Paused
 
+        // Update plant health gradually towards target based on soil state
+        this.updateHealth(adjustedDelta);
+
         // Calculate growth rate based on conditions
         const growthRate = this.calculateGrowthRate();
 
         // Accumulate growth points (1 point per second at 1.0 growth rate)
         const growthPoints = growthRate * adjustedDelta;
         this.state.totalGrowthPoints += growthPoints;
+
+        // Consume nutrients proportional to growth
+        if (growthPoints > 0) {
+            const nutrientUse = growthPoints * 0.0015; // Gentle consumption per second
+            this.soil.consumeNPK(nutrientUse * 1.2, nutrientUse, nutrientUse * 0.8);
+        }
 
         // Track days alive (for display)
         const secondsPerDay = 86400; // Real-world seconds
@@ -142,14 +159,16 @@ export class PlantLifecycle {
             return;
         }
 
-        const pointsNeeded = this.config.stageGrowthPoints.get(this.state.stage) || 100;
+        const threshold = this.getCumulativePoints(this.state.stage);
 
-        if (this.state.totalGrowthPoints >= pointsNeeded) {
+        if (this.state.totalGrowthPoints >= threshold) {
             // Advance to next stage
             const nextStage = this.stageOrder[currentStageIndex + 1];
             this.state.stage = nextStage;
-
             console.log(`🌱 Plant grew to ${nextStage} stage!`);
+            if (this.onStageChange) {
+                this.onStageChange(nextStage);
+            }
         }
     }
 
@@ -160,15 +179,16 @@ export class PlantLifecycle {
         const currentStageIndex = this.stageOrder.indexOf(this.state.stage);
 
         // Calculate points accumulated before current stage
-        let pointsBeforeStage = 0;
-        for (let i = 0; i < currentStageIndex; i++) {
-            const stage = this.stageOrder[i];
-            pointsBeforeStage += this.config.stageGrowthPoints.get(stage) || 0;
-        }
+        const pointsBeforeStage = this.getPointsBeforeStage(currentStageIndex);
 
         // Calculate progress within current stage
-        const pointsInCurrentStage = this.state.totalGrowthPoints - pointsBeforeStage;
+        const pointsInCurrentStage = Math.max(0, this.state.totalGrowthPoints - pointsBeforeStage);
         const pointsNeededForStage = this.config.stageGrowthPoints.get(this.state.stage) || 100;
+
+        if (pointsNeededForStage <= 0) {
+            this.state.growthProgress = 100;
+            return;
+        }
 
         this.state.growthProgress = Math.min(100, (pointsInCurrentStage / pointsNeededForStage) * 100);
     }
@@ -228,6 +248,99 @@ export class PlantLifecycle {
     public isMature(): boolean {
         return this.state.stage === LifecycleStage.MATURE || this.state.stage === LifecycleStage.FRUITING;
     }
+
+    /**
+     * Register a callback that fires when the stage changes
+     */
+    public setStageChangeHandler(handler: (stage: LifecycleStage) => void): void {
+        this.onStageChange = handler;
+    }
+
+    /**
+     * Serialize lifecycle state for saving
+     */
+    public serialize(): LifecycleSaveData {
+        return {
+            stage: this.state.stage,
+            totalGrowthPoints: this.state.totalGrowthPoints,
+            health: this.state.health,
+            daysAlive: this.state.daysAlive
+        };
+    }
+
+    /**
+     * Restore lifecycle state from saved data
+     */
+    public static fromSerialized(config: LifecycleConfig, soil: Soil, data: LifecycleSaveData): PlantLifecycle {
+        const lifecycle = new PlantLifecycle(config, soil, data.stage);
+        lifecycle.state = {
+            stage: data.stage,
+            growthProgress: lifecycle.state.growthProgress, // will be recalculated below
+            totalGrowthPoints: data.totalGrowthPoints,
+            health: data.health,
+            daysAlive: data.daysAlive
+        };
+        lifecycle.updateGrowthProgress();
+        return lifecycle;
+    }
+
+    private updateHealth(adjustedDelta: number): void {
+        const soilStats = this.soil.getStats();
+        let targetHealth = 100;
+
+        // Penalize for low nutrients
+        const avgNPK = (soilStats.nitrogen + soilStats.phosphorus + soilStats.potassium) / 3;
+        if (avgNPK < 15) {
+            targetHealth = 40;
+        } else if (avgNPK < 35) {
+            targetHealth = 70;
+        }
+
+        // Penalize for water extremes
+        if (soilStats.waterLevel < 15) {
+            targetHealth = Math.min(targetHealth, 45);
+        } else if (soilStats.waterLevel < 30) {
+            targetHealth = Math.min(targetHealth, 70);
+        }
+
+        const drainThreshold = soilStats.maxWater * 0.95;
+        if (soilStats.waterLevel > drainThreshold) {
+            targetHealth = Math.min(targetHealth, 65);
+        }
+
+        const delta = targetHealth - this.state.health;
+        if (Math.abs(delta) < 0.01) {
+            return;
+        }
+
+        // Smoothly move health towards target
+        const changeRate = adjustedDelta * 1; // 1 health per in-game second
+        if (delta > 0) {
+            this.state.health = Math.min(100, this.state.health + Math.min(changeRate, delta));
+        } else {
+            this.state.health = Math.max(0, this.state.health - Math.min(changeRate, -delta));
+        }
+    }
+
+    private getPointsBeforeStage(stageIndex: number): number {
+        let total = 0;
+        for (let i = 0; i < stageIndex; i++) {
+            const stage = this.stageOrder[i];
+            total += this.config.stageGrowthPoints.get(stage) ?? 0;
+        }
+        return total;
+    }
+
+    private getCumulativePoints(stage: LifecycleStage): number {
+        let total = 0;
+        for (const s of this.stageOrder) {
+            total += this.config.stageGrowthPoints.get(s) ?? 0;
+            if (s === stage) {
+                break;
+            }
+        }
+        return total;
+    }
 }
 
 /**
@@ -256,6 +369,18 @@ export const DEFAULT_LIFECYCLE_CONFIGS: Map<string, LifecycleConfig> = new Map([
             [LifecycleStage.YOUNG, 400],
             [LifecycleStage.MATURE, 600],
             [LifecycleStage.FRUITING, 0] // Ferns don't fruit
+        ])
+    }],
+    ['bush', {
+        plantType: 'bush',
+        baseGrowthRate: 0.9,
+        stageGrowthPoints: new Map([
+            [LifecycleStage.SEED, 90],
+            [LifecycleStage.SPROUT, 180],
+            [LifecycleStage.SEEDLING, 320],
+            [LifecycleStage.YOUNG, 520],
+            [LifecycleStage.MATURE, 780],
+            [LifecycleStage.FRUITING, 0]
         ])
     }]
 ]);

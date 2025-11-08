@@ -42,6 +42,8 @@ class Botanica {
     private tutorialSystem: TutorialSystem;
     private timeControlsUI: TimeControlsUI;
     private debugCommands: DebugCommands;
+    private homePodule: HomePodule;
+    private shopPodule: ShopPodule;
     private deltaTime: number = 0.0005; // Time delta for animations
 
     constructor() {
@@ -88,9 +90,16 @@ class Botanica {
             this.inventory.initializeStarterItems();
         }
 
-        // Initialize UI (note: InputManager not yet created, will be created next)
+        // Initialize podule system (needed by InputManager)
+        this.poduleManager = new PoduleManager(this.sceneManager.scene);
+
+        // Initialize InputManager (before creating UI that needs it)
+        this.inputManager = new InputManager(this.poduleManager, this.cameraManager.camera);
+        this.inputManager.init();
+
+        // Initialize UI (after InputManager is created)
         this.moneyDisplay = new MoneyDisplay();
-        this.shopUI = new ShopCategoryUI(this.purchaseSystem, this.inventory);
+        this.shopUI = new ShopCategoryUI(this.purchaseSystem, this.inventory, this.inputManager);
         this.inventoryUI = new InventoryUI(this.inventory);
         this.plantInspectionUI = new PlantInspectionUI(this.inventory);
         this.transitionOverlay = new TransitionOverlay(300);
@@ -100,19 +109,14 @@ class Botanica {
         // Wire up economy to money display
         this.economy.subscribe((money) => this.moneyDisplay.update(money));
 
-        // Initialize podule system
-        this.poduleManager = new PoduleManager(this.sceneManager.scene);
-
-        // Initialize InputManager (before creating podules that need it)
-        this.inputManager = new InputManager(this.poduleManager, this.cameraManager.camera);
-        this.inputManager.init();
-
         // Create TutorialOverlay now that InputManager exists
         this.tutorialOverlay = new TutorialOverlay(this.inputManager);
 
         // Create podules
         const homePodule = new HomePodule(poduleConfig, this.inventory, this.plantInspectionUI, this.inputManager);
-        const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI);
+        const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI, this.inputManager);
+        this.homePodule = homePodule;
+        this.shopPodule = shopPodule;
 
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);
@@ -140,6 +144,11 @@ class Botanica {
         // Also handle inventory close via other methods (ESC, click outside)
         this.inventoryUI.onClose(() => {
             this.inputManager.unregisterOverlay('inventory');
+        });
+
+        // Wire up shop UI with overlay awareness
+        this.shopUI.onClose(() => {
+            this.inputManager.unregisterOverlay('shop-category');
         });
 
         // Wire up plant inspection UI with overlay awareness
@@ -217,6 +226,10 @@ class Botanica {
 
     public getTutorialSystem(): TutorialSystem {
         return this.tutorialSystem;
+    }
+
+    public getHomePodule(): HomePodule {
+        return this.homePodule;
     }
 }
 

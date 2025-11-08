@@ -9,6 +9,7 @@
 import type { Pot } from '../containers/Pot';
 import type { Inventory } from '../inventory/Inventory';
 import type { SoilStats } from '../types';
+import { getStageDisplayName } from '../plants/PlantStagePresets';
 
 export class PlantInspectionUI {
     private container: HTMLDivElement;
@@ -138,6 +139,12 @@ export class PlantInspectionUI {
         const section = document.createElement('div');
         section.className = 'plant-inspection-stats';
 
+        // Lifecycle status (if plant present)
+        const lifecycleState = this.currentPot.getLifecycleState();
+        if (lifecycleState) {
+            section.appendChild(this.createLifecycleSection(lifecycleState));
+        }
+
         // Moisture display - three modes based on inventory
         const hasProMeter = this.inventory.hasItem('pro-moisture-meter');
         const hasBasicMeter = this.inventory.hasItem('basic-moisture-meter');
@@ -164,6 +171,85 @@ export class PlantInspectionUI {
         section.appendChild(this.createPHDisplay(stats));
 
         return section;
+    }
+
+    private createLifecycleSection(lifecycleState: ReturnType<Pot['getLifecycleState']>): HTMLElement {
+        const container = document.createElement('div');
+        container.className = 'lifecycle-section';
+
+        if (!lifecycleState) {
+            return container;
+        }
+
+        const header = document.createElement('div');
+        header.className = 'lifecycle-header';
+        header.textContent = `🌿 Growth Stage: ${getStageDisplayName(lifecycleState.stage)}`;
+
+        const progressRow = document.createElement('div');
+        progressRow.className = 'stat-row';
+
+        const progressLabel = document.createElement('div');
+        progressLabel.className = 'stat-label';
+        progressLabel.textContent = 'Progress';
+
+        const progressBarContainer = document.createElement('div');
+        progressBarContainer.className = 'stat-bar-container';
+
+        const progressBar = document.createElement('div');
+        progressBar.className = 'stat-bar growth-bar';
+        progressBar.style.width = `${lifecycleState.growthProgress.toFixed(1)}%`;
+
+        progressBarContainer.appendChild(progressBar);
+
+        const progressValue = document.createElement('div');
+        progressValue.className = 'stat-value';
+        progressValue.textContent = `${lifecycleState.growthProgress.toFixed(0)}%`;
+
+        progressRow.appendChild(progressLabel);
+        progressRow.appendChild(progressBarContainer);
+        progressRow.appendChild(progressValue);
+
+        const healthRow = document.createElement('div');
+        healthRow.className = 'stat-row';
+
+        const healthLabel = document.createElement('div');
+        healthLabel.className = 'stat-label';
+        healthLabel.textContent = 'Health';
+
+        const healthBarContainer = document.createElement('div');
+        healthBarContainer.className = 'stat-bar-container';
+
+        const healthBar = document.createElement('div');
+        healthBar.className = 'stat-bar health-bar';
+        healthBar.style.width = `${lifecycleState.health.toFixed(1)}%`;
+        if (lifecycleState.health < 40) {
+            healthBar.classList.add('low');
+        } else if (lifecycleState.health < 70) {
+            healthBar.classList.add('medium');
+        } else {
+            healthBar.classList.add('high');
+        }
+
+        healthBarContainer.appendChild(healthBar);
+
+        const healthValue = document.createElement('div');
+        healthValue.className = 'stat-value';
+        healthValue.textContent = `${lifecycleState.health.toFixed(0)}%`;
+
+        healthRow.appendChild(healthLabel);
+        healthRow.appendChild(healthBarContainer);
+        healthRow.appendChild(healthValue);
+
+        const daysAlive = document.createElement('div');
+        daysAlive.className = 'stat-info';
+        daysAlive.textContent = `📅 Days Alive: ${lifecycleState.daysAlive.toFixed(1)}`;
+
+        container.appendChild(header);
+        container.appendChild(progressRow);
+        container.appendChild(healthRow);
+        container.appendChild(daysAlive);
+
+        return container;
     }
 
     /**
@@ -309,12 +395,13 @@ export class PlantInspectionUI {
 
             const bar = document.createElement('div');
             bar.className = 'stat-bar npk-bar';
-            bar.style.width = `${nutrient.value}%`;
+            const roundedValue = Math.max(0, Math.round(nutrient.value));
+            bar.style.width = `${roundedValue}%`;
             bar.style.backgroundColor = '#aaa'; // Gray for static phase
 
             const value = document.createElement('div');
             value.className = 'stat-value';
-            value.textContent = `${nutrient.value}`;
+            value.textContent = `${roundedValue}`;
 
             barContainer.appendChild(bar);
             row.appendChild(label);

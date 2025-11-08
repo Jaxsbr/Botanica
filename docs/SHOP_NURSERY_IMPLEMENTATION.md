@@ -71,11 +71,12 @@ Interactive zone markers with:
 
 ### 4. Hotspot Manager (`src/shop/HotspotManager.ts`)
 Central coordinator for all hotspots:
-- Mouse event handling (move, click)
-- Raycaster integration
+- Receives normalized mouse coordinates from `InputManager` via `ShopPodule.handleMouseMove` / `handleClick`
+- Pure raycasting logic (no DOM listeners of its own)
 - Cursor state management (pointer on hover)
 - Manages multiple hotspots simultaneously
 - Update loop for animations
+- Designed to work in tandem with UI overlays registering with `InputManager` so hotspots stay muted while menus are open
 
 ### 5. Shop Category UI (`src/ui/ShopCategoryUI.ts`)
 Full-screen overlay that displays filtered items:
@@ -127,6 +128,7 @@ Comprehensive CSS for:
 ### 8. Integration (`src/main.ts`)
 - Pass camera reference to ShopPodule constructor
 - Hotspot system now has access to scene camera for raycasting
+- `InputManager` controls all mouse routing; Shop UI registers the `shop-category` overlay id so hotspots deactivate when menus are open
 
 ## User Experience Flow
 

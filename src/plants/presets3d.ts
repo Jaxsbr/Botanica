@@ -157,7 +157,7 @@ export const SAPLING_PRESET: Plant3DConfig = {
         bark: 0xF5F5DC, // Beige/cream
         leaves: 0x7CFC00, // Lawn green (young leaves)
     },
-    growthDirection: 0.2,
+    growthDirection: 0.5,
     branchLevels: 2, // Simple structure
 };
 

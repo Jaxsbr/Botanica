@@ -139,14 +139,25 @@ export class NewStaticPodule extends BasePodule {
 }
 ```
 
-**Overlay Awareness:**
+**Overlay Awareness & UI Contract:**
+Every fullscreen or modal UI that sits above a podule **must** register an overlay key when it appears and unregister that key before it fully closes. Skipping either step will immediately reintroduce click-through behaviour (hover highlights, unintended clicks) because the InputManager will continue forwarding mouse events to the active podule.
+
 ```typescript
-// Register overlay to block podule input
+// On open/show
 this.inputManager.registerOverlay('inventory');
 
-// Unregister when closed
+// On close/hide (before the element is removed)
 this.inputManager.unregisterOverlay('inventory');
 ```
+
+**Overlay Checklist (run this for every new UI overlay):**
+- [ ] Choose a unique overlay id (e.g. `shop-category`, `inventory`, `tutorial`)
+- [ ] Call `registerOverlay(id)` immediately when the UI becomes visible (before any asynchronous animations)
+- [ ] Guarantee `unregisterOverlay(id)` is invoked on every hide/close path (close buttons, ESC handlers, timeouts, etc.)
+- [ ] If the UI can be toggled, ensure the toggle function keeps the register/unregister calls in sync
+- [ ] Write an integration test or manual QA note that verifies hotspots stay inactive while the UI is open
+
+Following this pattern keeps the InputManager as the single source of truth for input routing and prevents regressions when new overlays are added.
 
 **Historical Context:**
 Prior to this system, `HotspotManager` created global event listeners in its constructor, causing persistent click-through issues where clicks in one podule would trigger actions in another. The Central Input Manager pattern solved this by ensuring only the active podule receives input events.

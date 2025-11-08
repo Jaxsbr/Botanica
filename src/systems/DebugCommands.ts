@@ -49,9 +49,15 @@ export class DebugCommands {
             return;
         }
 
-        // T key - Reset localStorage
-        if (event.key === 't' || event.key === 'T') {
+        const key = event.key.toLowerCase();
+
+        if (key === 't') {
             this.resetLocalStorage();
+            return;
+        }
+
+        if (key === 'l') {
+            this.logLifecycleStatus();
         }
     }
 
@@ -103,6 +109,27 @@ export class DebugCommands {
     public showHelp(): void {
         console.log('🐛 Debug Commands:');
         console.log('  T - Reset all localStorage (clear all game data)');
+        console.log('  L - Log plant lifecycle state table');
+    }
+
+    private logLifecycleStatus(): void {
+        const botanica = (window as typeof window & { botanica?: any }).botanica;
+        if (!botanica) {
+            console.warn('🐛 Unable to log lifecycle status: botanica instance not found');
+            return;
+        }
+
+        try {
+            const homePodule = botanica.getHomePodule?.();
+            const plantingSystem = homePodule?.getPlantingSystem?.();
+            if (plantingSystem) {
+                plantingSystem.debugLogLifecycles();
+            } else {
+                console.warn('🐛 Planting system not available for lifecycle logging');
+            }
+        } catch (error) {
+            console.error('🐛 Failed to log lifecycle status:', error);
+        }
     }
 }
 

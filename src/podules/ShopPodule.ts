@@ -4,6 +4,7 @@ import { Plant3D } from '../plants/Plant3D';
 import { ShopHotspot } from '../shop/Hotspot';
 import { HotspotManager } from '../shop/HotspotManager';
 import { ShopCategoryUI } from '../ui/ShopCategoryUI';
+import { InputManager } from '../systems/InputManager';
 import type { PoduleConfig, IClickable } from '../types';
 
 /**
@@ -23,7 +24,12 @@ export class ShopPodule extends BasePodule implements IClickable {
     private shopUI: ShopCategoryUI;
     private elapsedTime: number = 0;
 
-    constructor(config: PoduleConfig, camera: THREE.Camera, shopUI: ShopCategoryUI) {
+    constructor(
+        config: PoduleConfig,
+        camera: THREE.Camera,
+        shopUI: ShopCategoryUI,
+        private inputManager: InputManager
+    ) {
         // Shop podule uses larger size (8.0 radius) for spacious nursery
         super('shop', config, 8.0);
 

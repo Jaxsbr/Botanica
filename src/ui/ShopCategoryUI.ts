@@ -2,6 +2,7 @@ import type { ShopCategory, ShopItem } from '../types';
 import { getUnlockedItemsByCategory } from '../shop/ShopItems';
 import { PurchaseSystem } from '../systems/PurchaseSystem';
 import { Inventory } from '../inventory/Inventory';
+import { InputManager } from '../systems/InputManager';
 
 /**
  * ShopCategoryUI - Filtered shop overlay showing items from a specific category
@@ -18,7 +19,8 @@ export class ShopCategoryUI {
 
     constructor(
         private purchaseSystem: PurchaseSystem,
-        private inventory: Inventory
+        private inventory: Inventory,
+        private inputManager: InputManager
     ) {
         this.container = this.createContainer();
         document.body.appendChild(this.container);
@@ -51,6 +53,9 @@ export class ShopCategoryUI {
         this.currentCategory = category;
         this.isVisible = true;
 
+        // Register overlay to block podule input
+        this.inputManager.registerOverlay('shop-category');
+
         // Get items for this category
         const items = getUnlockedItemsByCategory(category);
         console.log('🛍️ Items to display:', items.length);
@@ -73,6 +78,9 @@ export class ShopCategoryUI {
     public hide(): void {
         this.isVisible = false;
         this.currentCategory = null;
+
+        // Unregister overlay to allow podule input
+        this.inputManager.unregisterOverlay('shop-category');
 
         this.container.classList.remove('visible');
         setTimeout(() => {

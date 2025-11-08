@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { POT_PRESETS, PotConfig } from './PotTypes';
 import { Plant3D } from '../plants/Plant3D';
 import { Soil } from '../systems/Soil';
+import type { PlantLifecycle, LifecycleState } from '../systems/PlantLifecycle';
 
 export class Pot {
     private group: THREE.Group;
@@ -9,6 +10,7 @@ export class Pot {
     private plant: Plant3D | null = null;
     private soil: Soil;
     private soilMesh: THREE.Mesh | null = null;
+    private lifecycle: PlantLifecycle | null = null;
 
     constructor(presetName: 'small' | 'large' = 'small') {
         this.config = POT_PRESETS[presetName];
@@ -172,6 +174,7 @@ export class Pot {
 
         const removedPlant = this.plant;
         this.plant = null;
+        this.lifecycle = null;
 
         return removedPlant;
     }
@@ -207,6 +210,18 @@ export class Pot {
      */
     public getPlant(): Plant3D | null {
         return this.plant;
+    }
+
+    public setLifecycle(lifecycle: PlantLifecycle | null): void {
+        this.lifecycle = lifecycle;
+    }
+
+    public getLifecycle(): PlantLifecycle | null {
+        return this.lifecycle;
+    }
+
+    public getLifecycleState(): LifecycleState | null {
+        return this.lifecycle ? this.lifecycle.getState() : null;
     }
 
     /**

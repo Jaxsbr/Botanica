@@ -258,5 +258,9 @@ export class HomePodule extends BasePodule implements IClickable {
         // Dispose all plants (already tracked)
         this.plants.forEach(plant => plant.dispose());
     }
+
+    public getPlantingSystem(): PlantingSystem {
+        return this.plantingSystem;
+    }
 }
 

@@ -283,6 +283,7 @@ Comprehensive documentation is in the `/docs` directory:
   - Architecture recommendations
   - Technical challenges and solutions
   - Development roadmap
+  - 🔒 Input overlay contract: see "Overlay Awareness & UI Contract" for the mandatory steps when adding new UI screens so they do not reactivate 3D hotspots
 
 - **[PLANT3D_GUIDE.md](docs/PLANT3D_GUIDE.md)** - Plant3D/ez-tree integration guide
   - Usage examples
