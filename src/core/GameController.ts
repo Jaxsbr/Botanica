@@ -17,7 +17,7 @@ import {
 } from './GameState';
 import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
-import { GameUI } from '../ui/GameUI';
+import { ActionMode, GameUI } from '../ui/GameUI';
 import { InteractionController } from '../input/InteractionController';
 
 const SOIL_TILE_COST_FRUIT = 5;
@@ -33,6 +33,7 @@ export class GameController {
     private readonly plantManager: PlantManager;
     private readonly ui: GameUI;
     private readonly interaction: InteractionController;
+    private currentMode: ActionMode = 'plant';
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
@@ -73,6 +74,7 @@ export class GameController {
         this.plantManager = new PlantManager(this.scene, this.gameState);
 
         this.ui = new GameUI({
+            onModeChanged: (mode) => this.handleModeChanged(mode),
             onSeedSelected: (seedId) => this.handleSeedSelection(seedId),
             onBuySoilTile: () => this.handleBuySoilTile()
         });
@@ -85,7 +87,6 @@ export class GameController {
             ],
             this.plantManager.plantDefinitions
         );
-        this.ui.setSelectedSeed(this.gameState.selectedSeedId);
         this.updateInventoryUI();
         this.updateShopUI();
 
@@ -128,9 +129,9 @@ export class GameController {
 
     private createInitialGameState(): GameState {
         const initialInventory: Inventory = {
-            fruit: 0,
+            fruit: 20,
             seeds: {
-                'lumen-bloom': 1
+                'lumen-bloom': 5
             }
         };
 
@@ -191,17 +192,38 @@ export class GameController {
         this.renderer.setSize(width, height);
     };
 
-    private handleSeedSelection(seedId: string): void {
-        if (this.gameState.selectedSeedId === seedId) {
-            this.gameState.selectedSeedId = null;
-        } else {
-            this.gameState.selectedSeedId = seedId;
+    private handleSeedSelection(seedId: string | null): void {
+        this.gameState.selectedSeedId = seedId;
+    }
+
+    private handleModeChanged(mode: ActionMode): void {
+        if (this.currentMode === mode) {
+            return;
         }
 
-        this.ui.setSelectedSeed(this.gameState.selectedSeedId);
+        this.currentMode = mode;
+
+        if (mode === 'plant') {
+            this.cancelSoilPlacement();
+            if (!this.gameState.selectedSeedId) {
+                const nextSeedId = this.getNextAvailableSeedId();
+                if (nextSeedId) {
+                    this.gameState.selectedSeedId = nextSeedId;
+                }
+            }
+            return;
+        }
+
+        if (mode === 'till') {
+            this.clearSeedSelection();
+        }
     }
 
     private handleSoilTileInteraction(tileId: string): void {
+        if (this.currentMode !== 'plant') {
+            return;
+        }
+
         if (this.isPlacingTile) {
             this.cancelSoilPlacement();
             return;
@@ -229,7 +251,6 @@ export class GameController {
 
         this.gameState.inventory.seeds[this.gameState.selectedSeedId] = availableSeedCount - 1;
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
-        this.clearSeedSelection();
     }
 
     private handlePlantInteraction(plantId: string): void {
@@ -249,18 +270,15 @@ export class GameController {
 
     private handleBuySoilTile(): void {
         if (this.isPlacingTile) {
-            this.cancelSoilPlacement();
             return;
         }
 
         const availablePositions = this.soilTileManager.getAvailableAdjacentPositions();
         if (availablePositions.length === 0) {
-            this.updateShopUI();
             return;
         }
 
         if (this.gameState.inventory.fruit < SOIL_TILE_COST_FRUIT) {
-            this.updateShopUI();
             return;
         }
 
@@ -290,19 +308,46 @@ export class GameController {
         this.soilTileManager.addTile(position);
         this.gameState.inventory.fruit -= SOIL_TILE_COST_FRUIT;
 
-        this.cancelSoilPlacement();
+        const nextPositions = this.soilTileManager.getAvailableAdjacentPositions();
+        const canAffordNext = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+        const hasNextPlacement = nextPositions.length > 0;
+
         this.updateInventoryUI();
+
+        if (canAffordNext && hasNextPlacement) {
+            this.pendingPlacementPositions = new Map(
+                nextPositions.map((nextPosition) => [
+                    SoilTileManager.getTileId(nextPosition),
+                    nextPosition
+                ])
+            );
+            this.soilTileManager.showPlacementPreviews(nextPositions);
+            this.updateShopUI();
+            return;
+        }
+
+        this.cancelSoilPlacement();
         this.updateShopUI();
     }
 
     private handlePointerMiss(): void {
-        if (this.isPlacingTile) {
-            this.cancelSoilPlacement();
+        if (!this.isPlacingTile) {
+            return;
         }
 
-        if (this.gameState.selectedSeedId) {
-            this.clearSeedSelection();
+        const availablePositions = this.soilTileManager.getAvailableAdjacentPositions();
+        const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+
+        if (!canAfford || availablePositions.length === 0) {
+            this.cancelSoilPlacement();
+            return;
         }
+
+        this.pendingPlacementPositions = new Map(
+            availablePositions.map((position) => [SoilTileManager.getTileId(position), position])
+        );
+        this.soilTileManager.showPlacementPreviews(availablePositions);
+        this.updateShopUI();
     }
 
     private cancelSoilPlacement(): void {
@@ -322,7 +367,16 @@ export class GameController {
         }
 
         this.gameState.selectedSeedId = null;
-        this.ui.setSelectedSeed(null);
+    }
+
+    private getNextAvailableSeedId(): string | null {
+        for (const [seedId, count] of Object.entries(this.gameState.inventory.seeds)) {
+            if (count > 0) {
+                return seedId;
+            }
+        }
+
+        return null;
     }
 
     private updateInventoryUI(): void {

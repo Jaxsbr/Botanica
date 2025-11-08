@@ -1,12 +1,12 @@
-@keyframes fruit-count-pulse {
+@keyframes counter-increase {
     0% {
         transform: scale(1);
         color: #183028;
     }
 
-    35% {
+    40% {
         transform: scale(1.25);
-        color: #ff8a4f;
+        color: #44c776;
     }
 
     100% {
@@ -15,115 +15,206 @@
     }
 }
 
-.game-ui__fruit-count {
-    min-width: 2ch;
-    display: inline-block;
-    transition: color 160ms ease;
-}
+@keyframes counter-decrease {
+    0% {
+        transform: scale(1);
+        color: #183028;
+    }
 
-.game-ui__fruit-count.is-pulsing {
-    animation: fruit-count-pulse 360ms ease;
+    40% {
+        transform: scale(0.85);
+        color: #e95a5a;
+    }
+
+    100% {
+        transform: scale(1);
+        color: #183028;
+    }
 }
 
 .game-ui {
     position: fixed;
-    top: 1.5rem;
-    right: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 1.25rem;
-    max-width: 18rem;
-    background: rgba(255, 255, 255, 0.92);
-    border-radius: 0.75rem;
-    box-shadow: 0 0.75rem 2rem rgba(16, 24, 40, 0.12);
+    inset: 0;
+    padding: 2.25rem;
+    pointer-events: none;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     color: #183028;
     z-index: 10;
-    backdrop-filter: blur(6px);
 }
 
-.game-ui__section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.game-ui__heading {
-    margin: 0;
-    font-size: 1rem;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: #35654d;
-}
-
-.game-ui__seed-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.game-ui__seed-button {
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid #b5d8c9;
-    background: #f1fffa;
-    color: #1a3f2d;
-    cursor: pointer;
-    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-}
-
-.game-ui__seed-button:hover:not(:disabled),
-.game-ui__seed-button.is-selected {
-    transform: translateY(-1px);
-    box-shadow: 0 0.4rem 1rem rgba(36, 82, 62, 0.15);
-    background: #d9ffee;
-    border-color: #64d38a;
-    color: #0f3d2a;
-}
-
-.game-ui__seed-button.is-selected {
-    outline: 2px solid rgba(255, 154, 60, 0.9);
-    outline-offset: 2px;
-}
-
-.game-ui__seed-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.game-ui__row {
+.game-ui__info-bar {
+    position: absolute;
+    top: 2.6rem;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    font-size: 0.95rem;
+    gap: 1.85rem;
+    padding: 1.1rem 2.25rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1.6rem 3.1rem rgba(16, 24, 40, 0.18);
+    backdrop-filter: blur(12px);
 }
 
-.game-ui__buy-button {
-    padding: 0.6rem 0.75rem;
-    border-radius: 0.6rem;
-    border: none;
+.game-ui__counter {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-size: 1.55rem;
     font-weight: 600;
-    background: linear-gradient(135deg, #ffb347, #ff5f5f);
-    color: #ffffff;
+    letter-spacing: 0.012em;
+    pointer-events: none;
+}
+
+.game-ui__counter-icon {
+    font-size: 2.05rem;
+    line-height: 1;
+}
+
+.game-ui__counter-value {
+    min-width: 2.6ch;
+    transition: color 160ms ease;
+}
+
+.game-ui__counter-value.is-increase {
+    animation: counter-increase 360ms ease;
+}
+
+.game-ui__counter-value.is-decrease {
+    animation: counter-decrease 360ms ease;
+}
+
+.game-ui__action-dock {
+    position: absolute;
+    top: 50%;
+    right: 3.25rem;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    pointer-events: auto;
+}
+
+.game-ui__action-button {
+    width: 6.1rem;
+    height: 6.1rem;
+    border-radius: 1.65rem;
+    border: none;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 1.35rem 3.1rem rgba(15, 35, 27, 0.22);
+    color: #1f3d2b;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
     cursor: pointer;
-    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    transition:
+        transform 140ms ease,
+        box-shadow 140ms ease,
+        background 140ms ease,
+        color 140ms ease;
 }
 
-.game-ui__buy-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 0.6rem 1.5rem rgba(255, 122, 70, 0.3);
+.game-ui__action-button:hover:not(.is-disabled):not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 1.45rem 3.3rem rgba(15, 35, 27, 0.26);
 }
 
-.game-ui__buy-button:disabled {
+.game-ui__action-button.is-active {
+    background: linear-gradient(135deg, #4ed884, #2c8f55);
+    color: #ffffff;
+    box-shadow: 0 1.45rem 3.25rem rgba(51, 163, 102, 0.48);
+}
+
+.game-ui__action-button[data-mode='plant'].is-active {
+    background: linear-gradient(135deg, #c8f7db, #71d4a0);
+    color: #135731;
+    box-shadow: 0 1.45rem 3.25rem rgba(113, 212, 160, 0.45);
+}
+
+.game-ui__action-button.is-disabled,
+.game-ui__action-button:disabled {
     cursor: not-allowed;
-    filter: grayscale(0.4);
-    opacity: 0.7;
+    opacity: 0.45;
+    box-shadow: none;
 }
 
-.game-ui__buy-button.is-selected {
+.game-ui__action-button.is-placement {
     background: linear-gradient(135deg, #ffd267, #ff8a4f);
     color: #3d1f00;
-    box-shadow: 0 0.6rem 1.5rem rgba(255, 154, 79, 0.35);
+    box-shadow: 0 1.2rem 3rem rgba(255, 154, 79, 0.4);
+}
+
+.game-ui__action-icon {
+    font-size: 2.45rem;
+    line-height: 1;
+}
+
+.game-ui__action-label {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: 600;
+}
+
+.game-ui__mode-message {
+    position: absolute;
+    top: 50%;
+    right: 10.25rem;
+    transform: translateY(-50%);
+    max-width: 17rem;
+    padding: 0.85rem 1.2rem;
+    border-radius: 0.9rem;
+    background: rgba(24, 48, 40, 0.85);
+    color: #ffffff;
+    font-size: 1rem;
+    line-height: 1.45;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+.game-ui__mode-message.is-visible {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+}
+
+@media (max-width: 900px) {
+    .game-ui__action-dock {
+        right: 2.3rem;
+    }
+
+    .game-ui__mode-message {
+        right: 8.25rem;
+    }
+}
+
+@media (max-width: 720px) {
+    .game-ui__info-bar {
+        top: 1.45rem;
+        padding: 0.85rem 1.6rem;
+        gap: 1.2rem;
+    }
+
+    .game-ui__action-dock {
+        position: absolute;
+        top: auto;
+        bottom: 1.2rem;
+        right: 50%;
+        transform: translateX(50%);
+        flex-direction: row;
+        gap: 1.2rem;
+    }
+
+    .game-ui__mode-message {
+        bottom: 5.8rem;
+        top: auto;
+        right: 50%;
+        transform: translateX(50%);
+        text-align: center;
+    }
 }
