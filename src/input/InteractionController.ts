@@ -15,12 +15,53 @@ export type HoverTarget =
     | { type: 'soil'; tile: SoilTile }
     | { type: 'preview'; previewTileId: string };
 
+export type DragIntent = 'harvest' | 'plant' | 'build';
+
+export interface DragIntentRequest {
+    target: HoverTarget;
+    pointerId: number;
+    nativeEvent: PointerEvent;
+    phase: 'start' | 'move';
+    baseIntent?: DragIntent;
+}
+
+export interface DragStartEvent {
+    baseIntent: DragIntent;
+    resolvedIntent: DragIntent;
+    target: HoverTarget;
+    pointerId: number;
+    nativeEvent: PointerEvent;
+}
+
+export interface DragMoveEvent {
+    baseIntent: DragIntent;
+    resolvedIntent: DragIntent | null;
+    target: HoverTarget;
+    pointerId: number;
+    nativeEvent: PointerEvent;
+}
+
+export interface DragEndEvent {
+    baseIntent: DragIntent;
+    pointerId: number;
+    reason: 'completed' | 'cancelled';
+    nativeEvent: PointerEvent | null;
+}
+
 export interface InteractionCallbacks {
-    onSoilTileSelected: (tileId: string) => void;
-    onPlantSelected: (plantId: string) => void;
-    onPlacementPreviewSelected: (previewTileId: string) => void;
+    resolveDragIntent: (request: DragIntentRequest) => DragIntent | null;
+    onDragStart: (event: DragStartEvent) => void;
+    onDragEnter: (event: DragMoveEvent) => void;
+    onDragEnd: (event: DragEndEvent) => void;
+    onActionRejected?: (request: DragIntentRequest) => void;
     onPointerMiss: () => void;
     onHoverChanged: (target: HoverTarget) => void;
+}
+
+interface ActiveDrag {
+    baseIntent: DragIntent;
+    pointerId: number;
+    visited: Set<string>;
 }
 
 export class InteractionController {
@@ -33,6 +74,7 @@ export class InteractionController {
     private readonly pointer = new Vector2();
     private lastPointerClient: { x: number; y: number } | null = null;
     private lastHoverTarget: HoverTarget = { type: 'none' };
+    private activeDrag: ActiveDrag | null = null;
 
     constructor(
         domElement: HTMLElement,
@@ -47,58 +89,24 @@ export class InteractionController {
         this.plantManager = plantManager;
         this.callbacks = callbacks;
 
-        this.domElement.addEventListener('pointerdown', this.handlePointerDown);
-        this.domElement.addEventListener('pointermove', this.handlePointerMove);
+        this.domElement.addEventListener('pointerdown', this.handlePointerDown, { passive: false });
+        this.domElement.addEventListener('pointermove', this.handlePointerMove, { passive: false });
+        this.domElement.addEventListener('pointerup', this.handlePointerUp);
+        this.domElement.addEventListener('pointercancel', this.handlePointerCancel);
         this.domElement.addEventListener('pointerleave', this.handlePointerLeave);
+        window.addEventListener('keydown', this.handleKeyDown, true);
+        this.domElement.addEventListener('contextmenu', this.handleContextMenu);
     }
 
     public dispose(): void {
         this.domElement.removeEventListener('pointerdown', this.handlePointerDown);
         this.domElement.removeEventListener('pointermove', this.handlePointerMove);
+        this.domElement.removeEventListener('pointerup', this.handlePointerUp);
+        this.domElement.removeEventListener('pointercancel', this.handlePointerCancel);
         this.domElement.removeEventListener('pointerleave', this.handlePointerLeave);
+        this.domElement.removeEventListener('contextmenu', this.handleContextMenu);
+        window.removeEventListener('keydown', this.handleKeyDown, true);
     }
-
-    private handlePointerDown = (event: PointerEvent): void => {
-        this.lastPointerClient = { x: event.clientX, y: event.clientY };
-        const firstHit = this.getFirstIntersectionAt(event.clientX, event.clientY);
-        if (!firstHit) {
-            this.callbacks.onPointerMiss();
-            return;
-        }
-
-        const previewId = firstHit.userData.previewTileId as string | undefined;
-        if (previewId) {
-            this.callbacks.onPlacementPreviewSelected(previewId);
-            return;
-        }
-
-        const plantId = firstHit.userData.plantId as string | undefined;
-        if (plantId) {
-            this.callbacks.onPlantSelected(plantId);
-            return;
-        }
-
-        const tile = this.soilTileManager.getTileFromObject(firstHit);
-        if (tile) {
-            this.callbacks.onSoilTileSelected(tile.id);
-            return;
-        }
-
-        this.callbacks.onPointerMiss();
-    };
-
-    private handlePointerMove = (event: PointerEvent): void => {
-        this.lastPointerClient = { x: event.clientX, y: event.clientY };
-        const intersection = this.getFirstIntersectionAt(event.clientX, event.clientY);
-        const hoverTarget = this.resolveHoverTarget(intersection);
-        this.updateHoverTarget(hoverTarget);
-    };
-
-    private handlePointerLeave = (): void => {
-        this.updateHoverTarget({ type: 'none' });
-        this.lastPointerClient = null;
-        this.callbacks.onPointerMiss();
-    };
 
     public refreshHover(): void {
         if (!this.lastPointerClient) {
@@ -112,6 +120,162 @@ export class InteractionController {
         );
         const hoverTarget = this.resolveHoverTarget(intersection);
         this.updateHoverTarget(hoverTarget);
+    }
+
+    private handlePointerDown = (event: PointerEvent): void => {
+        if (event.button !== 0) {
+            if (this.activeDrag && event.button === 2) {
+                this.cancelActiveDrag('cancelled', event);
+                event.preventDefault();
+            }
+            return;
+        }
+
+        this.lastPointerClient = { x: event.clientX, y: event.clientY };
+        const hoverTarget = this.getHoverTargetAt(event.clientX, event.clientY);
+        this.updateHoverTarget(hoverTarget);
+
+        const request: DragIntentRequest = {
+            target: hoverTarget,
+            pointerId: event.pointerId,
+            nativeEvent: event,
+            phase: 'start'
+        };
+
+        const resolvedIntent = this.callbacks.resolveDragIntent(request);
+        if (!resolvedIntent) {
+            if (hoverTarget.type === 'none') {
+                this.callbacks.onPointerMiss();
+            } else if (this.callbacks.onActionRejected) {
+                this.callbacks.onActionRejected(request);
+            }
+            return;
+        }
+
+        this.domElement.setPointerCapture(event.pointerId);
+        const drag: ActiveDrag = {
+            baseIntent: resolvedIntent,
+            pointerId: event.pointerId,
+            visited: new Set([this.getTargetKey(hoverTarget)])
+        };
+        this.activeDrag = drag;
+
+        const startEvent: DragStartEvent = {
+            baseIntent: drag.baseIntent,
+            resolvedIntent,
+            target: hoverTarget,
+            pointerId: event.pointerId,
+            nativeEvent: event
+        };
+        this.callbacks.onDragStart(startEvent);
+    };
+
+    private handlePointerMove = (event: PointerEvent): void => {
+        this.lastPointerClient = { x: event.clientX, y: event.clientY };
+        const hoverTarget = this.getHoverTargetAt(event.clientX, event.clientY);
+        this.updateHoverTarget(hoverTarget);
+
+        if (!this.activeDrag) {
+            return;
+        }
+
+        if (this.activeDrag.pointerId !== event.pointerId) {
+            return;
+        }
+
+        if ((event.buttons & 1) === 0) {
+            this.cancelActiveDrag('cancelled', event);
+            return;
+        }
+
+        const targetKey = this.getTargetKey(hoverTarget);
+        if (this.activeDrag.visited.has(targetKey)) {
+            return;
+        }
+        this.activeDrag.visited.add(targetKey);
+
+        const request: DragIntentRequest = {
+            target: hoverTarget,
+            pointerId: event.pointerId,
+            nativeEvent: event,
+            phase: 'move',
+            baseIntent: this.activeDrag.baseIntent
+        };
+        const resolvedIntent = this.callbacks.resolveDragIntent(request);
+
+        const moveEvent: DragMoveEvent = {
+            baseIntent: this.activeDrag.baseIntent,
+            resolvedIntent,
+            target: hoverTarget,
+            pointerId: event.pointerId,
+            nativeEvent: event
+        };
+        this.callbacks.onDragEnter(moveEvent);
+    };
+
+    private handlePointerUp = (event: PointerEvent): void => {
+        if (!this.activeDrag || this.activeDrag.pointerId !== event.pointerId) {
+            return;
+        }
+
+        this.endActiveDrag('completed', event);
+    };
+
+    private handlePointerCancel = (event: PointerEvent): void => {
+        if (!this.activeDrag || this.activeDrag.pointerId !== event.pointerId) {
+            return;
+        }
+
+        this.cancelActiveDrag('cancelled', event);
+    };
+
+    private handlePointerLeave = (): void => {
+        this.updateHoverTarget({ type: 'none' });
+        this.lastPointerClient = null;
+        if (!this.activeDrag) {
+            this.callbacks.onPointerMiss();
+        }
+    };
+
+    private handleContextMenu = (event: MouseEvent): void => {
+        if (this.activeDrag) {
+            event.preventDefault();
+            this.cancelActiveDrag('cancelled', null);
+        }
+    };
+
+    private handleKeyDown = (event: KeyboardEvent): void => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        if (this.activeDrag) {
+            event.preventDefault();
+            this.cancelActiveDrag('cancelled', null);
+        }
+    };
+
+    private endActiveDrag(reason: 'completed' | 'cancelled', event: PointerEvent | null): void {
+        if (!this.activeDrag) {
+            return;
+        }
+
+        const drag = this.activeDrag;
+        this.activeDrag = null;
+
+        this.domElement.releasePointerCapture(drag.pointerId);
+
+        const endEvent: DragEndEvent = {
+            baseIntent: drag.baseIntent,
+            pointerId: drag.pointerId,
+            reason,
+            nativeEvent: event
+        };
+        this.callbacks.onDragEnd(endEvent);
+    }
+
+    private cancelActiveDrag(reason: 'cancelled', event: PointerEvent | null): void {
+        this.endActiveDrag(reason, event);
     }
 
     private updateHoverTarget(target: HoverTarget): void {
@@ -135,6 +299,11 @@ export class InteractionController {
         this.callbacks.onHoverChanged(target);
     }
 
+    private getHoverTargetAt(clientX: number, clientY: number): HoverTarget {
+        const intersection = this.getFirstIntersectionAt(clientX, clientY);
+        return this.resolveHoverTarget(intersection);
+    }
+
     private resolveHoverTarget(intersection: Mesh | null): HoverTarget {
         if (!intersection) {
             return { type: 'none' };
@@ -156,6 +325,22 @@ export class InteractionController {
         }
 
         return { type: 'none' };
+    }
+
+    private getTargetKey(target: HoverTarget): string {
+        if (target.type === 'plant') {
+            return `plant:${target.plantId}`;
+        }
+
+        if (target.type === 'soil') {
+            return `soil:${target.tile.id}`;
+        }
+
+        if (target.type === 'preview') {
+            return `preview:${target.previewTileId}`;
+        }
+
+        return 'none';
     }
 
     private getFirstIntersectionAt(clientX: number, clientY: number): Mesh | null {

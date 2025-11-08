@@ -20,10 +20,17 @@ import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
 import { ActionMode, GameUI } from '../ui/GameUI';
 import {
+    DragEndEvent,
+    DragIntent,
+    DragIntentRequest,
+    DragMoveEvent,
+    DragStartEvent,
     HoverTarget,
     InteractionController
 } from '../input/InteractionController';
 import { CursorIndicator, CursorState } from '../ui/CursorIndicator';
+import { InteractionFeedbackController } from '../environment/feedback/InteractionFeedbackController';
+import { SoundController } from '../audio/SoundController';
 
 const SOIL_TILE_COST_FRUIT = 5;
 
@@ -39,13 +46,17 @@ export class GameController {
     private readonly ui: GameUI;
     private readonly interaction: InteractionController;
     private readonly cursorIndicator: CursorIndicator;
+    private readonly feedback: InteractionFeedbackController;
+    private readonly sound: SoundController;
     private currentMode: ActionMode = 'plant';
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
-    private isPlacingTile = false;
-    private pendingPlacementPositions: Map<string, GridPosition> = new Map();
+    private availableBuildPositions: Map<string, GridPosition> = new Map();
+    private activeDrag: { intent: DragIntent; exhausted: boolean } | null = null;
     private hoverTarget: HoverTarget = { type: 'none' };
+    private highlightedSoilId: string | null = null;
+    private highlightedPlantId: string | null = null;
 
     constructor(containerId: string = 'app') {
         const containerElement = document.getElementById(containerId);
@@ -82,11 +93,12 @@ export class GameController {
         this.plantManager = new PlantManager(this.scene, this.gameState);
 
         this.cursorIndicator = new CursorIndicator(this.renderer.domElement);
+        this.feedback = new InteractionFeedbackController(this.scene, this.soilTileManager, this.plantManager);
+        this.sound = new SoundController();
 
         this.ui = new GameUI({
             onModeChanged: (mode) => this.handleModeChanged(mode),
-            onSeedSelected: (seedId) => this.handleSeedSelection(seedId),
-            onBuySoilTile: () => this.handleBuySoilTile()
+            onSeedSelected: (seedId) => this.handleSeedSelection(seedId)
         });
         this.ui.setSeedOptions(
             [
@@ -98,7 +110,7 @@ export class GameController {
             this.plantManager.plantDefinitions
         );
         this.updateInventoryUI();
-        this.updateShopUI();
+        this.refreshBuildState();
 
         this.interaction = new InteractionController(
             this.renderer.domElement,
@@ -106,9 +118,11 @@ export class GameController {
             this.soilTileManager,
             this.plantManager,
             {
-                onPlantSelected: (plantId) => this.handlePlantInteraction(plantId),
-                onSoilTileSelected: (tileId) => this.handleSoilTileInteraction(tileId),
-                onPlacementPreviewSelected: (tileId) => this.handlePlacementPreview(tileId),
+                resolveDragIntent: (request) => this.handleResolveDragIntent(request),
+                onDragStart: (event) => this.handleDragStart(event),
+                onDragEnter: (event) => this.handleDragEnter(event),
+                onDragEnd: (event) => this.handleDragEnd(event),
+                onActionRejected: (request) => this.handleActionRejected(request),
                 onPointerMiss: () => this.handlePointerMiss(),
                 onHoverChanged: (target) => this.handleHoverChanged(target)
             }
@@ -133,6 +147,7 @@ export class GameController {
 
         this.interaction.dispose();
         this.ui.destroy();
+        this.sound.dispose();
         this.plantManager.dispose();
         this.soilTileManager.dispose();
         this.grassPodule.dispose();
@@ -190,7 +205,135 @@ export class GameController {
     private update(currentTime: number, _delta: number): void {
         this.plantManager.update(currentTime);
         this.soilTileManager.updatePlacementPreviews(currentTime);
+        this.feedback.update(currentTime);
     }
+
+    private handleResolveDragIntent = (request: DragIntentRequest): DragIntent | null => {
+        const { target, phase, baseIntent } = request;
+
+        if (target.type === 'plant') {
+            const plant = this.gameState.plants.get(target.plantId);
+            if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
+                return 'harvest';
+            }
+            return null;
+        }
+
+        if (target.type === 'soil') {
+            if (baseIntent && baseIntent !== 'plant') {
+                return null;
+            }
+
+            if (this.currentMode !== 'plant' && !baseIntent) {
+                return null;
+            }
+
+            if (
+                phase === 'move' &&
+                baseIntent === 'plant' &&
+                this.activeDrag &&
+                this.activeDrag.intent === 'plant' &&
+                this.activeDrag.exhausted
+            ) {
+                return null;
+            }
+
+            return this.canPlantOnTile(target.tile) ? 'plant' : null;
+        }
+
+        if (target.type === 'preview') {
+            if (baseIntent && baseIntent !== 'build') {
+                return null;
+            }
+
+            if (this.currentMode !== 'build' && !baseIntent) {
+                return null;
+            }
+
+            const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+            return canAfford && this.availableBuildPositions.has(target.previewTileId) ? 'build' : null;
+        }
+
+        return null;
+    };
+
+    private handleDragStart = (event: DragStartEvent): void => {
+        void this.sound.unlock();
+        this.activeDrag = {
+            intent: event.baseIntent,
+            exhausted: false
+        };
+
+        if (event.resolvedIntent === 'harvest' && event.target.type === 'plant') {
+            this.executeHarvest(event.target.plantId, event.nativeEvent.timeStamp ?? performance.now());
+            return;
+        }
+
+        if (event.resolvedIntent === 'plant' && event.target.type === 'soil') {
+            const planted = this.executePlant(event.target.tile.id, event.nativeEvent.timeStamp ?? performance.now());
+            if (!planted) {
+                this.activeDrag.exhausted = true;
+            } else if (!this.hasSeedsAvailable()) {
+                this.activeDrag.exhausted = true;
+            }
+            return;
+        }
+
+        if (event.resolvedIntent === 'build' && event.target.type === 'preview') {
+            const built = this.executeBuild(event.target.previewTileId);
+            if (!built) {
+                this.activeDrag.exhausted = true;
+            } else if (!this.canAffordNextSoil() || this.availableBuildPositions.size === 0) {
+                this.activeDrag.exhausted = true;
+            }
+        }
+    };
+
+    private handleDragEnter = (event: DragMoveEvent): void => {
+        if (!this.activeDrag) {
+            return;
+        }
+
+        if (event.resolvedIntent === 'harvest' && event.target.type === 'plant') {
+            this.executeHarvest(event.target.plantId, event.nativeEvent.timeStamp ?? performance.now());
+            return;
+        }
+
+        if (event.resolvedIntent === 'plant' && event.target.type === 'soil') {
+            const planted = this.executePlant(event.target.tile.id, event.nativeEvent.timeStamp ?? performance.now());
+            if (!planted) {
+                this.feedback.triggerSoilShake(event.target.tile.id);
+            } else if (!this.hasSeedsAvailable() && this.activeDrag) {
+                this.activeDrag.exhausted = true;
+            }
+            return;
+        }
+
+        if (event.resolvedIntent === 'build' && event.target.type === 'preview') {
+            const built = this.executeBuild(event.target.previewTileId);
+            if (!built && this.activeDrag) {
+                this.activeDrag.exhausted = true;
+            }
+            return;
+        }
+
+        this.showBlockedFeedback(event.target);
+    };
+
+    private handleDragEnd = (event: DragEndEvent): void => {
+        this.activeDrag = null;
+        if (event.reason === 'cancelled') {
+            this.feedback.clearAll();
+            this.highlightedSoilId = null;
+            this.highlightedPlantId = null;
+            this.refreshBuildState();
+            this.interaction.refreshHover();
+        }
+    };
+
+    private handleActionRejected = (request: DragIntentRequest): void => {
+        this.showBlockedFeedback(request.target);
+    };
 
     private handleResize = (): void => {
         const width = this.container.clientWidth;
@@ -203,6 +346,156 @@ export class GameController {
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
     };
+
+    private executePlant(tileId: string, timestamp: number): boolean {
+        if (!this.gameState.selectedSeedId) {
+            return false;
+        }
+
+        const availableSeedCount =
+            this.gameState.inventory.seeds[this.gameState.selectedSeedId] ?? 0;
+        if (availableSeedCount <= 0) {
+            this.clearSeedSelection();
+            return false;
+        }
+
+        const planted = this.plantManager.plantSeed(
+            tileId,
+            this.gameState.selectedSeedId,
+            timestamp
+        );
+        if (!planted) {
+            return false;
+        }
+
+        this.gameState.inventory.seeds[this.gameState.selectedSeedId] = availableSeedCount - 1;
+        this.updateInventoryUI();
+        this.ensurePlantSelection();
+        this.interaction.refreshHover();
+        this.sound.play('plant');
+        return true;
+    }
+
+    private executeHarvest(plantId: string, timestamp: number): boolean {
+        const result = this.plantManager.harvestPlant(plantId, timestamp);
+        if (!result) {
+            return false;
+        }
+
+        this.ensurePlantSelection();
+        this.updateInventoryUI();
+        if (result.fruitYield > 0) {
+            this.ui.triggerFruitPulse();
+        }
+        if (this.highlightedPlantId === plantId) {
+            this.highlightedPlantId = null;
+        }
+        this.feedback.setPlantHighlight(plantId, 'none');
+        this.interaction.refreshHover();
+        this.sound.play('harvest');
+        return true;
+    }
+
+    private executeBuild(previewTileId: string): boolean {
+        const position = this.availableBuildPositions.get(previewTileId);
+        if (!position) {
+            return false;
+        }
+
+        if (this.gameState.inventory.fruit < SOIL_TILE_COST_FRUIT) {
+            return false;
+        }
+
+        this.soilTileManager.addTile(position);
+        this.gameState.inventory.fruit -= SOIL_TILE_COST_FRUIT;
+        this.updateInventoryUI();
+        this.sound.play('build');
+        return true;
+    }
+
+    private refreshBuildState(): void {
+        const positions = this.soilTileManager.getAvailableAdjacentPositions();
+        this.availableBuildPositions = new Map(
+            positions.map((position) => [SoilTileManager.getTileId(position), position])
+        );
+
+        const hasAdjacent = positions.length > 0;
+        const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+        const inBuildMode = this.currentMode === 'build';
+
+        if (inBuildMode && hasAdjacent) {
+            this.soilTileManager.showPlacementPreviews(positions);
+            this.soilTileManager.setPlacementPreviewAffordability(canAfford);
+        } else {
+            this.soilTileManager.clearPlacementPreviews();
+        }
+
+        let message: string | undefined;
+        if (inBuildMode) {
+            if (!hasAdjacent) {
+                message = 'No adjacent space available';
+            } else if (!canAfford) {
+                message = `Need ${SOIL_TILE_COST_FRUIT} fruit to add tile`;
+            }
+        }
+
+        this.ui.setBuildState({
+            available: hasAdjacent && canAfford,
+            placementActive: inBuildMode && hasAdjacent,
+            message
+        });
+
+        this.updateCursorState();
+        if (inBuildMode) {
+            this.interaction.refreshHover();
+        }
+    }
+
+    private showBlockedFeedback(target: HoverTarget): void {
+        if (target.type === 'plant') {
+            this.feedback.triggerPlantShake(target.plantId);
+            this.feedback.setPlantHighlight(target.plantId, 'blocked');
+            this.ui.showModeMessage('Not ready to harvest');
+            return;
+        }
+
+        if (target.type === 'soil') {
+            this.feedback.showSoilHighlight(target.tile.id, 'plant-blocked');
+            this.feedback.triggerSoilShake(target.tile.id);
+
+            if (target.tile.occupiedByPlantId) {
+                this.ui.showModeMessage('Tile occupied');
+            } else if (!this.hasSeedsAvailable()) {
+                this.ui.showModeMessage('Out of seeds');
+            } else {
+                this.ui.showModeMessage('Cannot plant here');
+            }
+            return;
+        }
+
+        if (target.type === 'preview') {
+            const position = this.availableBuildPositions.get(target.previewTileId);
+            if (position) {
+                const tileId = SoilTileManager.getTileId(position);
+                this.feedback.showSoilHighlight(tileId, 'build-blocked');
+            }
+            if (!this.canAffordNextSoil()) {
+                this.ui.showModeMessage('Need more fruit');
+            }
+        }
+    }
+
+    private hasSeedsAvailable(): boolean {
+        if (!this.gameState.selectedSeedId) {
+            return false;
+        }
+
+        return (this.gameState.inventory.seeds[this.gameState.selectedSeedId] ?? 0) > 0;
+    }
+
+    private canAffordNextSoil(): boolean {
+        return this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
+    }
 
     private handleSeedSelection(seedId: string | null): void {
         this.gameState.selectedSeedId = seedId;
@@ -217,176 +510,27 @@ export class GameController {
         this.currentMode = mode;
 
         if (mode === 'plant') {
-            this.cancelSoilPlacement();
             if (!this.gameState.selectedSeedId) {
                 const nextSeedId = this.getNextAvailableSeedId();
                 if (nextSeedId) {
                     this.gameState.selectedSeedId = nextSeedId;
                 }
             }
-            return;
-        }
-
-        if (mode === 'till') {
+            this.refreshBuildState();
+        } else if (mode === 'build') {
             this.clearSeedSelection();
+            this.refreshBuildState();
         }
 
         this.updateCursorState();
-    }
-
-    private handleSoilTileInteraction(tileId: string): void {
-        if (this.currentMode !== 'plant') {
-            return;
-        }
-
-        if (this.isPlacingTile) {
-            this.cancelSoilPlacement();
-            return;
-        }
-
-        if (!this.gameState.selectedSeedId) {
-            return;
-        }
-
-        const availableSeedCount =
-            this.gameState.inventory.seeds[this.gameState.selectedSeedId] ?? 0;
-        if (availableSeedCount <= 0) {
-            this.clearSeedSelection();
-            return;
-        }
-
-        const planted = this.plantManager.plantSeed(
-            tileId,
-            this.gameState.selectedSeedId,
-            performance.now()
-        );
-        if (!planted) {
-            return;
-        }
-
-        this.gameState.inventory.seeds[this.gameState.selectedSeedId] = availableSeedCount - 1;
-        this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
-        this.updateCursorState();
-        this.interaction.refreshHover();
-    }
-
-    private handlePlantInteraction(plantId: string): void {
-        const result = this.plantManager.harvestPlant(plantId, performance.now());
-        if (!result) {
-            return;
-        }
-
-        this.ensurePlantSelection();
-        this.cancelSoilPlacement();
-        this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
-        if (result.fruitYield > 0) {
-            this.ui.triggerFruitPulse();
-        }
-        this.updateShopUI();
-        this.interaction.refreshHover();
-    }
-
-    private handleBuySoilTile(): void {
-        if (this.isPlacingTile) {
-            return;
-        }
-
-        const availablePositions = this.soilTileManager.getAvailableAdjacentPositions();
-        if (availablePositions.length === 0) {
-            return;
-        }
-
-        if (this.gameState.inventory.fruit < SOIL_TILE_COST_FRUIT) {
-            return;
-        }
-
-        this.isPlacingTile = true;
-        this.pendingPlacementPositions = new Map(
-            availablePositions.map((position) => [SoilTileManager.getTileId(position), position])
-        );
-        this.soilTileManager.showPlacementPreviews(availablePositions);
-        this.updateShopUI();
-        this.updateCursorState();
-        this.interaction.refreshHover();
-    }
-
-    private handlePlacementPreview(previewTileId: string): void {
-        if (!this.isPlacingTile) {
-            return;
-        }
-
-        const position = this.pendingPlacementPositions.get(previewTileId);
-        if (!position) {
-            return;
-        }
-
-        if (this.gameState.inventory.fruit < SOIL_TILE_COST_FRUIT) {
-            this.cancelSoilPlacement();
-            return;
-        }
-
-        this.soilTileManager.addTile(position);
-        this.gameState.inventory.fruit -= SOIL_TILE_COST_FRUIT;
-
-        const nextPositions = this.soilTileManager.getAvailableAdjacentPositions();
-        const canAffordNext = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
-        const hasNextPlacement = nextPositions.length > 0;
-
-        this.updateInventoryUI();
-
-        if (canAffordNext && hasNextPlacement) {
-            this.pendingPlacementPositions = new Map(
-                nextPositions.map((nextPosition) => [
-                    SoilTileManager.getTileId(nextPosition),
-                    nextPosition
-                ])
-            );
-            this.soilTileManager.showPlacementPreviews(nextPositions);
-            this.updateShopUI();
-            this.updateCursorState();
-            this.interaction.refreshHover();
-            return;
-        }
-
-        this.cancelSoilPlacement();
-        this.updateShopUI();
         this.interaction.refreshHover();
     }
 
     private handlePointerMiss(): void {
         this.setHoverTarget({ type: 'none' });
-
-        if (!this.isPlacingTile) {
-            return;
+        if (this.currentMode === 'build') {
+            this.refreshBuildState();
         }
-
-        const availablePositions = this.soilTileManager.getAvailableAdjacentPositions();
-        const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
-
-        if (!canAfford || availablePositions.length === 0) {
-            this.cancelSoilPlacement();
-            return;
-        }
-
-        this.pendingPlacementPositions = new Map(
-            availablePositions.map((position) => [SoilTileManager.getTileId(position), position])
-        );
-        this.soilTileManager.showPlacementPreviews(availablePositions);
-        this.updateShopUI();
-        this.updateCursorState();
-    }
-
-    private cancelSoilPlacement(): void {
-        if (!this.isPlacingTile) {
-            return;
-        }
-
-        this.isPlacingTile = false;
-        this.pendingPlacementPositions.clear();
-        this.soilTileManager.clearPlacementPreviews();
-        this.updateShopUI();
-        this.updateCursorState();
-        this.interaction.refreshHover();
     }
 
     private clearSeedSelection(): void {
@@ -395,6 +539,7 @@ export class GameController {
         }
 
         this.gameState.selectedSeedId = null;
+        this.updateCursorState();
     }
 
     private ensurePlantSelection(): void {
@@ -425,38 +570,7 @@ export class GameController {
 
     private updateInventoryUI(): void {
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
-        this.updateCursorState();
-    }
-
-    private updateShopUI(): void {
-        if (this.isPlacingTile) {
-            this.ui.setBuyTileState({
-                enabled: true,
-                costFruit: SOIL_TILE_COST_FRUIT,
-                placementMode: true,
-                message: 'Select a highlighted spot to place soil'
-            });
-            return;
-        }
-
-        const availablePositions = this.soilTileManager.getAvailableAdjacentPositions();
-        const hasAdjacent = availablePositions.length > 0;
-        const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
-        const enabled = hasAdjacent && canAfford;
-        let message: string | undefined;
-
-        if (!hasAdjacent) {
-            message = 'No adjacent space available';
-        } else if (!canAfford) {
-            message = `Need ${SOIL_TILE_COST_FRUIT} fruit to add tile`;
-        }
-
-        this.ui.setBuyTileState({
-            enabled,
-            costFruit: SOIL_TILE_COST_FRUIT,
-            message
-        });
-        this.updateCursorState();
+        this.refreshBuildState();
     }
 
     private handleHoverChanged(target: HoverTarget): void {
@@ -464,6 +578,30 @@ export class GameController {
     }
 
     private setHoverTarget(target: HoverTarget): void {
+        if (this.highlightedSoilId && (target.type !== 'soil' || target.tile.id !== this.highlightedSoilId)) {
+            this.feedback.clearSoilHighlight(this.highlightedSoilId);
+            this.highlightedSoilId = null;
+        }
+
+        if (this.highlightedPlantId && (target.type !== 'plant' || target.plantId !== this.highlightedPlantId)) {
+            this.feedback.setPlantHighlight(this.highlightedPlantId, 'none');
+            this.highlightedPlantId = null;
+        }
+
+        if (target.type === 'soil') {
+            const highlightState = this.canPlantOnTile(target.tile) ? 'plant-ready' : 'plant-blocked';
+            this.feedback.showSoilHighlight(target.tile.id, highlightState);
+            this.highlightedSoilId = target.tile.id;
+        } else if (target.type === 'plant') {
+            const plant = this.gameState.plants.get(target.plantId);
+            if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
+                this.feedback.setPlantHighlight(target.plantId, 'harvest-ready');
+            } else {
+                this.feedback.setPlantHighlight(target.plantId, 'blocked');
+            }
+            this.highlightedPlantId = target.plantId;
+        }
+
         this.hoverTarget = target;
         this.updateCursorState();
     }
@@ -471,21 +609,11 @@ export class GameController {
     private updateCursorState(): void {
         let nextState: CursorState = 'default';
 
-        if (this.hoverTarget.type === 'plant') {
-            const plant = this.gameState.plants.get(this.hoverTarget.plantId);
-            if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
-                nextState = 'harvest';
-            } else {
-                nextState = 'plant-disabled';
-            }
-        } else if (this.hoverTarget.type === 'preview') {
-            const canPlace = this.isPlacingTile && this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
-            nextState = canPlace ? 'build' : 'build-disabled';
-        } else if (this.hoverTarget.type === 'soil') {
-            if (this.currentMode === 'plant') {
-                const canPlant = this.canPlantOnTile(this.hoverTarget.tile);
-                nextState = canPlant ? 'plant' : 'plant-disabled';
-            }
+        if (this.currentMode === 'plant') {
+            nextState = this.hasSeedsAvailable() ? 'plant' : 'plant-disabled';
+        } else if (this.currentMode === 'build') {
+            const canBuild = this.availableBuildPositions.size > 0 && this.canAffordNextSoil();
+            nextState = canBuild ? 'build' : 'build-disabled';
         }
 
         this.cursorIndicator.setState(nextState);

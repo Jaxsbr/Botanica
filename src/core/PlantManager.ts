@@ -219,6 +219,28 @@ export class PlantManager {
         this.harvestBursts.length = 0;
     }
 
+    public getVisualById(plantId: string): PlantVisual | null {
+        return this.visualsByPlantId.get(plantId) ?? null;
+    }
+
+    public setHarvestGlow(plantId: string, intensity: number): void {
+        const visual = this.visualsByPlantId.get(plantId);
+        if (!visual) {
+            return;
+        }
+
+        visual.setHarvestGlow(intensity);
+    }
+
+    public triggerPlantShake(plantId: string): void {
+        const visual = this.visualsByPlantId.get(plantId);
+        if (!visual) {
+            return;
+        }
+
+        visual.playShake();
+    }
+
     private advancePhaseIfNeeded(
         plant: PlantState,
         definition: PlantDefinition,

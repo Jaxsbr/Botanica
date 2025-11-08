@@ -5,7 +5,7 @@ export interface SeedOption {
     label: string;
 }
 
-export type ActionMode = 'plant' | 'till';
+export type ActionMode = 'plant' | 'build';
 
 interface ActionConfig {
     mode: ActionMode;
@@ -15,13 +15,12 @@ interface ActionConfig {
 
 const ACTION_CONFIG: ActionConfig[] = [
     { mode: 'plant', icon: '🌱', label: 'Plant' },
-    { mode: 'till', icon: '⛏️', label: 'Till' }
+    { mode: 'build', icon: '🧱', label: 'Build' }
 ];
 
 export interface GameUIBindings {
     onModeChanged: (mode: ActionMode) => void;
     onSeedSelected: (seedId: string | null) => void;
-    onBuySoilTile: () => void;
 }
 
 interface RootElements {
@@ -43,11 +42,12 @@ export class GameUI {
     private currentMode: ActionMode = 'plant';
     private lastSeedTotal = 0;
     private lastFruitCount = 0;
-    private isPlacementMode = false;
     private plantAvailable = false;
-    private tillAvailable = false;
+    private buildAvailable = false;
+    private buildPlacementActive = false;
     private seedOptions: SeedOption[] = [];
     private primarySeedId: string | null = null;
+    private messageTimeout: number | null = null;
 
     constructor(bindings: GameUIBindings) {
         this.bindings = bindings;
@@ -99,21 +99,23 @@ export class GameUI {
         this.animateCounter(this.fruitCountValue, 1);
     }
 
-    public setBuyTileState(options: {
-        enabled: boolean;
-        costFruit: number;
+    public setBuildState(options: {
+        available: boolean;
         message?: string;
-        placementMode?: boolean;
+        placementActive?: boolean;
     }): void {
-        const { enabled, placementMode } = options;
-        this.isPlacementMode = Boolean(placementMode);
-        this.tillAvailable = enabled;
+        const { available, placementActive } = options;
+        this.buildPlacementActive = Boolean(placementActive);
+        this.buildAvailable = available;
 
-        this.modeMessage.textContent = '';
-        this.modeMessage.classList.remove('is-visible');
+        if (options.message) {
+            this.showModeMessage(options.message, true);
+        } else {
+            this.clearModeMessage();
+        }
 
-        if (this.isPlacementMode) {
-            this.setMode('till', { notify: false });
+        if (this.buildPlacementActive) {
+            this.setMode('build', { notify: false });
         }
 
         this.updateActionButtonStates();
@@ -123,7 +125,26 @@ export class GameUI {
         this.setMode(mode, { notify: false });
     }
 
+    public showModeMessage(message: string, persist = false): void {
+        if (this.messageTimeout !== null) {
+            window.clearTimeout(this.messageTimeout);
+            this.messageTimeout = null;
+        }
+
+        this.modeMessage.textContent = message;
+        this.modeMessage.classList.add('is-visible');
+
+        if (persist) {
+            return;
+        }
+
+        this.messageTimeout = window.setTimeout(() => {
+            this.clearModeMessage();
+        }, 1600);
+    }
+
     public destroy(): void {
+        this.clearModeMessage();
         this.root.remove();
         this.actionButtons.clear();
     }
@@ -138,10 +159,6 @@ export class GameUI {
         }
 
         this.setMode(mode, { notify: true });
-
-        if (mode === 'till' && !this.isPlacementMode) {
-            this.bindings.onBuySoilTile();
-        }
     }
 
     private setMode(mode: ActionMode, options: { notify: boolean }): void {
@@ -158,10 +175,10 @@ export class GameUI {
             return;
         }
 
-        if (mode === 'plant') {
-            this.bindings.onSeedSelected(this.primarySeedId ?? null);
-        } else {
+        if (mode === 'build') {
             this.bindings.onSeedSelected(null);
+        } else {
+            this.bindings.onSeedSelected(this.primarySeedId ?? null);
         }
 
         this.bindings.onModeChanged(mode);
@@ -193,12 +210,12 @@ export class GameUI {
         for (const [mode, button] of this.actionButtons.entries()) {
             const available = this.isModeAvailable(mode);
             const isActive = mode === this.currentMode;
-            const shouldDisable = !available && !isActive && !(mode === 'till' && this.isPlacementMode);
+            const shouldDisable = !available && !isActive && !(mode === 'build' && this.buildPlacementActive);
 
             button.disabled = shouldDisable;
             button.classList.toggle('is-disabled', shouldDisable);
 
-            button.classList.toggle('is-placement', mode === 'till' && this.isPlacementMode);
+            button.classList.toggle('is-placement', mode === 'build' && this.buildPlacementActive);
         }
     }
 
@@ -207,11 +224,11 @@ export class GameUI {
             return this.plantAvailable;
         }
 
-        if (this.isPlacementMode) {
-            return true;
+        if (mode === 'build') {
+            return this.buildPlacementActive || this.buildAvailable;
         }
 
-        return this.tillAvailable;
+        return false;
     }
 
     private animateCounter(element: HTMLElement, diff: number): void {
@@ -296,6 +313,16 @@ export class GameUI {
         }
 
         return { container, buttons };
+    }
+
+    private clearModeMessage(): void {
+        if (this.messageTimeout !== null) {
+            window.clearTimeout(this.messageTimeout);
+            this.messageTimeout = null;
+        }
+
+        this.modeMessage.textContent = '';
+        this.modeMessage.classList.remove('is-visible');
     }
 
     private createActionButton(action: ActionConfig): HTMLButtonElement {

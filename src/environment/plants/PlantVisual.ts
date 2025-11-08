@@ -44,6 +44,9 @@ const PLANTING_ANIMATION_DURATION = 450;
 const PLANTING_START_SCALE = 0.6;
 const TRANSITION_DURATION_MS = 650;
 const TRANSITION_PARTICLE_DURATION_MS = 900;
+const SHAKE_DURATION_MS = 220;
+const SHAKE_AMPLITUDE = 0.18;
+const GLOW_EMISSIVE_BOOST = 0.4;
 
 const STEM_COLOR = new Color(0x356026);
 const LEAF_COLOR = new Color(0x4dbf3b);
@@ -104,6 +107,9 @@ export class PlantVisual {
     private transition: TransitionState | null = null;
     private readonly transitionParticles: TransitionParticle[] = [];
     private readonly transitionParticleGeometry = new SphereGeometry(0.06, 14, 12);
+    private readonly materialBaseEmissive = new WeakMap<MeshStandardMaterial, number>();
+    private harvestGlowIntensity = 0;
+    private shakeState: { startTime: number } | null = null;
 
     constructor(initialPhase: GrowthPhase) {
         this.group = new Group();
@@ -187,8 +193,11 @@ export class PlantVisual {
             return;
         }
 
-        const finalScale = activeVisual.baseScale * pulse * plantingScale;
+        const glowScale = 1 + this.harvestGlowIntensity * 0.08;
+        const finalScale = activeVisual.baseScale * pulse * plantingScale * glowScale;
         activeVisual.group.scale.setScalar(finalScale);
+        this.applyHarvestGlow(activeVisual);
+        this.updateShake(currentTimeMs);
         this.updateTransitionParticles(currentTimeMs);
     }
 
@@ -216,6 +225,14 @@ export class PlantVisual {
 
         this.group.removeFromParent();
         this.phaseVisuals.clear();
+    }
+
+    public setHarvestGlow(intensity: number): void {
+        this.harvestGlowIntensity = Math.min(Math.max(intensity, 0), 1);
+    }
+
+    public playShake(): void {
+        this.shakeState = { startTime: performance.now() };
     }
 
     private applyPhaseImmediately(phase: GrowthPhase): void {
@@ -292,11 +309,13 @@ export class PlantVisual {
 
     private createStemMesh(height: number, radius: number): Mesh {
         const geometry = new CylinderGeometry(radius * 0.7, radius, height, 10);
-        const material = new MeshStandardMaterial({
-            color: STEM_COLOR,
-            roughness: 0.7,
-            metalness: 0.1
-        });
+        const material = this.trackMaterial(
+            new MeshStandardMaterial({
+                color: STEM_COLOR,
+                roughness: 0.7,
+                metalness: 0.1
+            })
+        );
         const mesh = new Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -305,11 +324,13 @@ export class PlantVisual {
 
     private createLeafMesh(length: number, width: number, tiltRadians: number): Mesh {
         const geometry = new ConeGeometry(width, length, 14);
-        const material = new MeshStandardMaterial({
-            color: LEAF_COLOR,
-            roughness: 0.5,
-            metalness: 0.05
-        });
+        const material = this.trackMaterial(
+            new MeshStandardMaterial({
+                color: LEAF_COLOR,
+                roughness: 0.5,
+                metalness: 0.05
+            })
+        );
         const mesh = new Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -327,13 +348,15 @@ export class PlantVisual {
             const interactiveMeshes: Mesh[] = [];
 
             const centerGeometry = new CylinderGeometry(0.1, 0.1, 0.055, 20);
-            const centerMaterial = new MeshStandardMaterial({
-                color: BLOOM_COLOR.clone().offsetHSL(0, -0.05, 0.08),
-                roughness: 0.2,
-                metalness: 0.2,
-                emissive: new Color(0xffc37a),
-                emissiveIntensity: 0.18
-            });
+            const centerMaterial = this.trackMaterial(
+                new MeshStandardMaterial({
+                    color: BLOOM_COLOR.clone().offsetHSL(0, -0.05, 0.08),
+                    roughness: 0.2,
+                    metalness: 0.2,
+                    emissive: new Color(0xffc37a),
+                    emissiveIntensity: 0.18
+                })
+            );
             const centerMesh = new Mesh(centerGeometry, centerMaterial);
             centerMesh.rotation.x = Math.PI / 2;
             centerMesh.castShadow = true;
@@ -375,11 +398,13 @@ export class PlantVisual {
         interactiveMeshes.push(...petals.meshes);
 
         const receptacleGeometry = new CylinderGeometry(0.09, 0.09, 0.035, 18);
-        const receptacleMaterial = new MeshStandardMaterial({
-            color: new Color(0x6ece75),
-            roughness: 0.45,
-            metalness: 0.18
-        });
+        const receptacleMaterial = this.trackMaterial(
+            new MeshStandardMaterial({
+                color: new Color(0x6ece75),
+                roughness: 0.45,
+                metalness: 0.18
+            })
+        );
         const receptacleMesh = new Mesh(receptacleGeometry, receptacleMaterial);
         receptacleMesh.rotation.x = Math.PI / 2;
         receptacleMesh.position.y = -0.02;
@@ -389,13 +414,15 @@ export class PlantVisual {
         interactiveMeshes.push(receptacleMesh);
 
         const fruitGeometry = new SphereGeometry(0.19, 22, 18);
-        const fruitMaterial = new MeshStandardMaterial({
-            color: FRUIT_COLOR,
-            roughness: 0.32,
-            metalness: 0.3,
-            emissive: new Color(0xff6b85),
-            emissiveIntensity: 0.12
-        });
+        const fruitMaterial = this.trackMaterial(
+            new MeshStandardMaterial({
+                color: FRUIT_COLOR,
+                roughness: 0.32,
+                metalness: 0.3,
+                emissive: new Color(0xff6b85),
+                emissiveIntensity: 0.12
+            })
+        );
         const fruitMesh = new Mesh(fruitGeometry, fruitMaterial);
         fruitMesh.position.y = 0.05;
         fruitMesh.castShadow = true;
@@ -441,13 +468,15 @@ export class PlantVisual {
         for (let index = 0; index < count; index += 1) {
             const angle = (index / count) * Math.PI * 2;
             const petalGeometry = new SphereGeometry(geometryRadius, 20, 16);
-            const petalMaterial = new MeshStandardMaterial({
-                color: color.clone(),
-                roughness: 0.4,
-                metalness: 0.1,
-                emissive: emissiveColor ? emissiveColor.clone() : new Color(0x000000),
-                emissiveIntensity
-            });
+            const petalMaterial = this.trackMaterial(
+                new MeshStandardMaterial({
+                    color: color.clone(),
+                    roughness: 0.4,
+                    metalness: 0.1,
+                    emissive: emissiveColor ? emissiveColor.clone() : new Color(0x000000),
+                    emissiveIntensity
+                })
+            );
             const petalMesh = new Mesh(petalGeometry, petalMaterial);
             petalMesh.scale.set(scale.x, scale.y, scale.z);
             petalMesh.position.set(Math.cos(angle) * radius, verticalOffset, Math.sin(angle) * radius);
@@ -462,6 +491,50 @@ export class PlantVisual {
             group,
             meshes
         };
+    }
+
+    private applyHarvestGlow(visual: PhaseVisual): void {
+        const targetBoost = this.harvestGlowIntensity * GLOW_EMISSIVE_BOOST;
+
+        visual.group.traverse((child) => {
+            const mesh = child as Mesh;
+            if (!mesh.isMesh) {
+                return;
+            }
+
+            const material = mesh.material as MeshStandardMaterial;
+            if (!material || !(material instanceof MeshStandardMaterial)) {
+                return;
+            }
+
+            const base =
+                this.materialBaseEmissive.get(material) ?? material.emissiveIntensity ?? 0;
+            this.materialBaseEmissive.set(material, base);
+            material.emissiveIntensity = base + targetBoost;
+        });
+    }
+
+    private updateShake(currentTimeMs: number): void {
+        if (!this.shakeState) {
+            this.group.rotation.z = 0;
+            return;
+        }
+
+        const elapsed = currentTimeMs - this.shakeState.startTime;
+        if (elapsed >= SHAKE_DURATION_MS) {
+            this.group.rotation.z = 0;
+            this.shakeState = null;
+            return;
+        }
+
+        const progress = elapsed / SHAKE_DURATION_MS;
+        const strength = Math.sin(progress * Math.PI * 4) * (1 - progress);
+        this.group.rotation.z = strength * SHAKE_AMPLITUDE;
+    }
+
+    private trackMaterial(material: MeshStandardMaterial): MeshStandardMaterial {
+        this.materialBaseEmissive.set(material, material.emissiveIntensity ?? 0);
+        return material;
     }
 
     private computeLeafAngles(phase: GrowthPhase): number[] {

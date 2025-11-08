@@ -6,7 +6,8 @@ import {
     MeshStandardMaterial,
     Object3D,
     PlaneGeometry,
-    Scene
+    Scene,
+    Vector3
 } from 'three';
 import {
     GameState,
@@ -115,6 +116,19 @@ export class SoilTileManager {
         return this.getTileById(tileId);
     }
 
+    public getTileMesh(tileId: string): Mesh | null {
+        return this.tileMeshes.get(tileId) ?? null;
+    }
+
+    public getTileWorldPosition(tileId: string): Vector3 | null {
+        const mesh = this.tileMeshes.get(tileId);
+        if (!mesh) {
+            return null;
+        }
+
+        return mesh.position.clone();
+    }
+
     public getIntersectableMeshes(): Mesh[] {
         return [...this.tileMeshes.values()];
     }
@@ -148,6 +162,15 @@ export class SoilTileManager {
         }
 
         this.previewMeshes.clear();
+    }
+
+    public setPlacementPreviewAffordability(affordable: boolean): void {
+        const color = affordable ? 0xffe29a : 0xf2b0b0;
+        for (const mesh of this.previewMeshes.values()) {
+            const material = mesh.material as MeshBasicMaterial;
+            material.color.setHex(color);
+            material.opacity = affordable ? 0.6 : 0.45;
+        }
     }
 
     public updatePlacementPreviews(currentTime: number): void {
