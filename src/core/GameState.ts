@@ -52,4 +52,4 @@ export interface ShopItem {
     costFruit: number;
 }
 
-export const TILE_SPACING = 1.8;
+export const TILE_SPACING = 1.5;

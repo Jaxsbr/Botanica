@@ -1,12 +1,16 @@
 import {
-    BoxGeometry,
+    Color,
+    DoubleSide,
+    ExtrudeGeometry,
     Group,
     Mesh,
     MeshBasicMaterial,
     MeshStandardMaterial,
     Object3D,
-    PlaneGeometry,
+    Path,
     Scene,
+    Shape,
+    ShapeGeometry,
     Vector3
 } from 'three';
 import {
@@ -17,36 +21,77 @@ import {
 } from './GameState';
 
 const TILE_HEIGHT = 0.1;
-const TILE_SIZE = 1.4;
-const PREVIEW_PULSE_SPEED = 4;
-const PREVIEW_PULSE_INTENSITY = 0.12;
+export const TILE_SIZE = 1.4;
+export const TILE_CHAMFER = 0.16;
+const PREVIEW_CHAMFER = TILE_CHAMFER;
+const PREVIEW_BORDER_WIDTH = 0.08;
+const PREVIEW_BORDER_PULSE_SPEED = 2.6;
+const PREVIEW_BORDER_PULSE_INTENSITY = 0.5;
 
 export class SoilTileManager {
     private readonly scene: Scene;
     private readonly gameState: GameState;
     private readonly tileMeshes: Map<string, Mesh> = new Map();
+    private readonly tileBorderMeshes: Map<string, Mesh> = new Map();
     private readonly tileGroup: Group = new Group();
     private readonly previewMeshes: Map<string, Mesh> = new Map();
+    private readonly previewBorderMeshes: Map<string, Mesh> = new Map();
     private readonly previewGroup: Group = new Group();
-    private readonly tileGeometry = new BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
+    private readonly tileGeometry = SoilTileManager.createTileGeometry(
+        TILE_SIZE,
+        TILE_HEIGHT,
+        TILE_CHAMFER
+    );
     private readonly tileMaterial = new MeshStandardMaterial({
-        color: 0x8b5a2b,
-        roughness: 0.9
+        color: 0x7b4b24,
+        roughness: 0.9,
+        metalness: 0.05
     });
-    private readonly previewGeometry = new PlaneGeometry(TILE_SIZE * 0.9, TILE_SIZE * 0.9);
-    private readonly previewMaterial = new MeshBasicMaterial({
-        color: 0xffe29a,
+    private readonly tileBorderGeometry = SoilTileManager.createBorderGeometry(
+        TILE_SIZE,
+        PREVIEW_BORDER_WIDTH,
+        TILE_CHAMFER
+    );
+    private readonly tileBorderMaterial = new MeshBasicMaterial({
+        color: 0x2b1608,
+        side: DoubleSide
+    });
+    private readonly previewFillGeometry = SoilTileManager.createChamferedPlaneGeometry(
+        TILE_SIZE,
+        PREVIEW_CHAMFER
+    );
+    private readonly previewFillMaterial = new MeshBasicMaterial({
+        color: 0x9ec9ff,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.35,
         depthWrite: false
     });
-    private previewPulseStart = 0;
+    private readonly previewBorderGeometry = SoilTileManager.createBorderGeometry(
+        TILE_SIZE,
+        PREVIEW_BORDER_WIDTH,
+        PREVIEW_CHAMFER
+    );
+    private readonly previewBorderMaterial = new MeshBasicMaterial({
+        color: 0x1f4f99,
+        transparent: true,
+        opacity: 0.7,
+        side: DoubleSide,
+        depthWrite: false
+    });
+    private readonly previewFillColorAffordable = new Color(0x9ec9ff);
+    private readonly previewFillColorUnavailable = new Color(0x8fa3c4);
+    private readonly previewBorderBaseColorAffordable = new Color(0x1f4f99);
+    private readonly previewBorderGlowColorAffordable = new Color(0x64a0ff);
+    private readonly previewBorderBaseColorUnavailable = new Color(0x3c4c6f);
+    private readonly previewBorderGlowColorUnavailable = new Color(0x6a7d94);
+    private readonly previewBorderCurrentBaseColor = new Color(0x1f4f99);
+    private readonly previewBorderCurrentGlowColor = new Color(0x64a0ff);
+    private previewBorderPulseStart = 0;
 
     constructor(scene: Scene, gameState: GameState) {
         this.scene = scene;
         this.gameState = gameState;
         this.tileGroup.position.y = TILE_HEIGHT / 2;
-        this.previewGeometry.rotateX(-Math.PI / 2);
         this.previewGroup.position.y = TILE_HEIGHT + 0.005;
         this.scene.add(this.tileGroup);
         this.scene.add(this.previewGroup);
@@ -77,6 +122,17 @@ export class SoilTileManager {
         mesh.receiveShadow = true;
         mesh.userData.tileId = tileId;
 
+        const borderMesh = new Mesh(this.tileBorderGeometry, this.tileBorderMaterial);
+        borderMesh.position.set(
+            position.x * TILE_SPACING,
+            TILE_HEIGHT * 1.6, // height above soil tile
+            position.z * TILE_SPACING
+        );
+        borderMesh.castShadow = false;
+        borderMesh.receiveShadow = false;
+        borderMesh.userData.tileId = tileId;
+        borderMesh.renderOrder = mesh.renderOrder;
+
         const tile: SoilTile = {
             id: tileId,
             gridPosition: position,
@@ -84,7 +140,9 @@ export class SoilTileManager {
         };
 
         this.tileGroup.add(mesh);
+        this.tileGroup.add(borderMesh);
         this.tileMeshes.set(tileId, mesh);
+        this.tileBorderMeshes.set(tileId, borderMesh);
         this.gameState.tiles.set(tileId, tile);
 
         return tile;
@@ -139,11 +197,11 @@ export class SoilTileManager {
 
     public showPlacementPreviews(positions: GridPosition[]): void {
         this.clearPlacementPreviews();
-        this.previewPulseStart = Date.now();
+        this.previewBorderPulseStart = Date.now();
 
         for (const position of positions) {
             const id = SoilTileManager.getTileId(position);
-            const previewMesh = new Mesh(this.previewGeometry, this.previewMaterial);
+            const previewMesh = new Mesh(this.previewFillGeometry, this.previewFillMaterial);
             previewMesh.position.set(
                 position.x * TILE_SPACING,
                 0,
@@ -153,6 +211,14 @@ export class SoilTileManager {
             previewMesh.userData.previewTileId = id;
             this.previewGroup.add(previewMesh);
             this.previewMeshes.set(id, previewMesh);
+
+            const borderMesh = new Mesh(this.previewBorderGeometry, this.previewBorderMaterial);
+            borderMesh.position.copy(previewMesh.position);
+            borderMesh.scale.copy(previewMesh.scale);
+            borderMesh.userData.previewTileId = id;
+            borderMesh.renderOrder = previewMesh.renderOrder + 1;
+            this.previewGroup.add(borderMesh);
+            this.previewBorderMeshes.set(id, borderMesh);
         }
     }
 
@@ -162,31 +228,44 @@ export class SoilTileManager {
         }
 
         this.previewMeshes.clear();
+
+        for (const border of this.previewBorderMeshes.values()) {
+            border.removeFromParent();
+        }
+
+        this.previewBorderMeshes.clear();
     }
 
     public setPlacementPreviewAffordability(affordable: boolean): void {
-        const color = affordable ? 0xffe29a : 0xf2b0b0;
-        for (const mesh of this.previewMeshes.values()) {
-            const material = mesh.material as MeshBasicMaterial;
-            material.color.setHex(color);
-            material.opacity = affordable ? 0.6 : 0.45;
-        }
+        const fillColor = affordable ? this.previewFillColorAffordable : this.previewFillColorUnavailable;
+        const borderBase = affordable
+            ? this.previewBorderBaseColorAffordable
+            : this.previewBorderBaseColorUnavailable;
+        const borderGlow = affordable
+            ? this.previewBorderGlowColorAffordable
+            : this.previewBorderGlowColorUnavailable;
+
+        this.previewFillMaterial.color.copy(fillColor);
+        this.previewFillMaterial.opacity = affordable ? 0.35 : 0.25;
+        this.previewBorderCurrentBaseColor.copy(borderBase);
+        this.previewBorderCurrentGlowColor.copy(borderGlow);
+        this.previewBorderMaterial.color.copy(borderBase);
+        this.previewBorderMaterial.opacity = affordable ? 0.7 : 0.5;
     }
 
     public updatePlacementPreviews(currentTime: number): void {
-        if (this.previewMeshes.size === 0) {
+        if (this.previewBorderMeshes.size === 0) {
             return;
         }
 
-        const start = this.previewPulseStart || currentTime;
+        const start = this.previewBorderPulseStart || currentTime;
         const elapsed = (currentTime - start) / 1000;
-        const pulse = 1 + Math.sin(elapsed * PREVIEW_PULSE_SPEED) * PREVIEW_PULSE_INTENSITY;
+        const pulseT = (Math.sin(elapsed * PREVIEW_BORDER_PULSE_SPEED) + 1) / 2;
+        const eased = pulseT * PREVIEW_BORDER_PULSE_INTENSITY;
 
-        for (const mesh of this.previewMeshes.values()) {
-            mesh.scale.set(pulse, pulse, pulse);
-            const material = mesh.material as MeshBasicMaterial;
-            material.opacity = 0.45 + (pulse - 1) * 1.2;
-        }
+        this.previewBorderMaterial.color.copy(this.previewBorderCurrentBaseColor);
+        this.previewBorderMaterial.color.lerp(this.previewBorderCurrentGlowColor, eased);
+        this.previewBorderMaterial.opacity = 0.55 + eased * 0.45;
     }
 
     public getAvailableAdjacentPositions(): GridPosition[] {
@@ -228,14 +307,94 @@ export class SoilTileManager {
         this.tileGroup.removeFromParent();
         this.previewGroup.removeFromParent();
         this.tileMeshes.clear();
+        this.tileBorderMeshes.clear();
         this.previewMeshes.clear();
+        this.previewBorderMeshes.clear();
         this.tileGeometry.dispose();
-        this.previewGeometry.dispose();
+        this.previewFillGeometry.dispose();
+        this.previewBorderGeometry.dispose();
         this.tileMaterial.dispose();
-        this.previewMaterial.dispose();
+        this.tileBorderGeometry.dispose();
+        this.tileBorderMaterial.dispose();
+        this.previewFillMaterial.dispose();
+        this.previewBorderMaterial.dispose();
     }
 
     public static getTileId(position: GridPosition): string {
         return `${position.x}_${position.z}`;
     }
+
+    public static createChamferedPlaneGeometry(size: number, chamfer: number): ShapeGeometry {
+        const shape = SoilTileManager.createChamferedRectangleShape(size / 2, chamfer);
+        const geometry = new ShapeGeometry(shape);
+        geometry.rotateX(-Math.PI / 2);
+        return geometry;
+    }
+
+    private static createBorderGeometry(
+        size: number,
+        borderWidth: number,
+        chamfer: number
+    ): ShapeGeometry {
+        const halfSize = size / 2;
+        const shape = SoilTileManager.createChamferedRectangleShape(halfSize, chamfer);
+
+        const innerHalfSize = Math.max(halfSize - borderWidth, 0);
+        if (innerHalfSize > 0) {
+            const innerChamfer = Math.max(chamfer - borderWidth, 0);
+            const hole = SoilTileManager.createChamferedRectanglePath(innerHalfSize, innerChamfer);
+            shape.holes.push(hole);
+        }
+
+        const geometry = new ShapeGeometry(shape);
+        geometry.rotateX(-Math.PI / 2);
+        return geometry;
+    }
+
+    private static createChamferedRectangleShape(halfSize: number, chamfer: number): Shape {
+        const c = Math.min(chamfer, halfSize);
+        const h = halfSize;
+
+        const shape = new Shape();
+        shape.moveTo(-h + c, -h);
+        shape.lineTo(h - c, -h);
+        shape.lineTo(h, -h + c);
+        shape.lineTo(h, h - c);
+        shape.lineTo(h - c, h);
+        shape.lineTo(-h + c, h);
+        shape.lineTo(-h, h - c);
+        shape.lineTo(-h, -h + c);
+        shape.lineTo(-h + c, -h);
+
+        return shape;
+    }
+
+    private static createChamferedRectanglePath(halfSize: number, chamfer: number): Path {
+        const c = Math.min(chamfer, halfSize);
+        const h = halfSize;
+
+        const path = new Path();
+        path.moveTo(-h + c, -h);
+        path.lineTo(-h, -h + c);
+        path.lineTo(-h, h - c);
+        path.lineTo(-h + c, h);
+        path.lineTo(h - c, h);
+        path.lineTo(h, h - c);
+        path.lineTo(h, -h + c);
+        path.lineTo(h - c, -h);
+        path.lineTo(-h + c, -h);
+        return path;
+    }
+
+    private static createTileGeometry(size: number, height: number, chamfer: number): ExtrudeGeometry {
+        const shape = SoilTileManager.createChamferedRectangleShape(size / 2, chamfer);
+        const geometry = new ExtrudeGeometry(shape, {
+            depth: height,
+            bevelEnabled: false
+        });
+        geometry.rotateX(-Math.PI / 2);
+        geometry.translate(0, height / 2, 0);
+        return geometry;
+    }
+
 }

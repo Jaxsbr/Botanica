@@ -1,6 +1,6 @@
-import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Scene } from 'three';
+import { Color, Group, Mesh, MeshBasicMaterial, Scene } from 'three';
 import { PlantManager } from '../../core/PlantManager';
-import { SoilTileManager } from '../../core/SoilTileManager';
+import { SoilTileManager, TILE_CHAMFER, TILE_SIZE } from '../../core/SoilTileManager';
 
 export type SoilHighlightState =
     | 'plant-ready'
@@ -49,7 +49,10 @@ export class InteractionFeedbackController {
     private readonly soilTileManager: SoilTileManager;
     private readonly plantManager: PlantManager;
     private readonly overlayGroup = new Group();
-    private readonly overlayGeometry = new PlaneGeometry(1, 1);
+    private readonly overlayGeometry = SoilTileManager.createChamferedPlaneGeometry(
+        TILE_SIZE - 0.1,
+        TILE_CHAMFER
+    );
     private readonly overlayMaterial = new MeshBasicMaterial({
         transparent: true,
         opacity: 0.35,
@@ -62,7 +65,6 @@ export class InteractionFeedbackController {
     constructor(scene: Scene, soilTileManager: SoilTileManager, plantManager: PlantManager) {
         this.soilTileManager = soilTileManager;
         this.plantManager = plantManager;
-        this.overlayGeometry.rotateX(-Math.PI / 2);
         this.overlayGroup.visible = true;
         scene.add(this.overlayGroup);
     }
@@ -222,7 +224,6 @@ export class InteractionFeedbackController {
     private createOverlayMesh(): Mesh {
         const material = this.overlayMaterial.clone();
         const mesh = new Mesh(this.overlayGeometry.clone(), material);
-        mesh.scale.setScalar(1.35);
         mesh.position.y = 0.16;
         return mesh;
     }
