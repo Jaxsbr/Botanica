@@ -37,6 +37,11 @@ export class NavigationUI {
         this.buttons.set('shop', shopBtn);
         nav.appendChild(shopBtn);
 
+        // Dev sandbox button
+        const devBtn = this.createButton('dev', '🧪', 'Dev Lab');
+        this.buttons.set('dev', devBtn);
+        nav.appendChild(devBtn);
+
         // Inventory button (not a podule, just opens overlay)
         this.inventoryButton = this.createInventoryButton();
         nav.appendChild(this.inventoryButton);

@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 // Podule system types
-export type PoduleType = 'home' | 'shop';
+export type PoduleType = 'home' | 'shop' | 'dev';
 
 export interface PoduleConfig {
     radius: number;

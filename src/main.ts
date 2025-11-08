@@ -20,6 +20,9 @@ import { TutorialSystem } from './systems/TutorialSystem';
 import { TimeControlsUI } from './ui/TimeControlsUI';
 import { DebugCommands } from './systems/DebugCommands';
 import type { PoduleConfig, LightingConfig, CameraConfig } from './types';
+import { DevPodule } from './podules/DevPodule';
+import { DevPlantConfigurator } from './ui/devtools/DevPlantConfigurator';
+import { PRESETS } from './plants/presets3d';
 
 class Botanica {
     private sceneManager: SceneManager;
@@ -44,6 +47,8 @@ class Botanica {
     private debugCommands: DebugCommands;
     private homePodule: HomePodule;
     private shopPodule: ShopPodule;
+    private devPodule: DevPodule;
+    private devConfigurator: DevPlantConfigurator;
     private deltaTime: number = 0.0005; // Time delta for animations
 
     constructor() {
@@ -105,6 +110,7 @@ class Botanica {
         this.transitionOverlay = new TransitionOverlay(300);
         this.navigationUI = new NavigationUI();
         this.timeControlsUI = new TimeControlsUI();
+        this.devConfigurator = new DevPlantConfigurator({ presets: PRESETS });
 
         // Wire up economy to money display
         this.economy.subscribe((money) => this.moneyDisplay.update(money));
@@ -115,11 +121,14 @@ class Botanica {
         // Create podules
         const homePodule = new HomePodule(poduleConfig, this.inventory, this.plantInspectionUI, this.inputManager);
         const shopPodule = new ShopPodule(poduleConfig, this.cameraManager.camera, this.shopUI, this.inputManager);
+        const devPodule = new DevPodule(poduleConfig, this.devConfigurator, this.inputManager);
         this.homePodule = homePodule;
         this.shopPodule = shopPodule;
+        this.devPodule = devPodule;
 
         this.poduleManager.addPodule(homePodule);
         this.poduleManager.addPodule(shopPodule);
+        this.poduleManager.addPodule(devPodule);
 
         // Wire up navigation
         this.navigationUI.onClick(async (type) => {
