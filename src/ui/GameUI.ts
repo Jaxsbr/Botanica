@@ -22,7 +22,7 @@ export interface SeedOption {
     label: string;
 }
 
-export type ActionMode = 'plant' | 'build';
+export type ActionMode = 'plant' | 'build' | 'water';
 
 interface ActionConfig {
     mode: ActionMode;
@@ -32,7 +32,8 @@ interface ActionConfig {
 
 const ACTION_CONFIG: ActionConfig[] = [
     { mode: 'plant', icon: '🌱', label: 'Plant' },
-    { mode: 'build', icon: '🧱', label: 'Build' }
+    { mode: 'build', icon: '🧱', label: 'Build' },
+    { mode: 'water', icon: '💧', label: 'Water' }
 ];
 
 export interface GameUIBindings {
@@ -162,6 +163,10 @@ export class GameUI {
     private plantAvailable = false;
     private buildAvailable = false;
     private buildPlacementActive = false;
+    private waterAvailable = true;
+    private waterLevel = 1;
+    private waterCapacity = 1;
+    private waterStatusMessage: string | null = null;
     private seedOptions: SeedOption[] = [];
     private lastInventory: Inventory | null = null;
     private primarySeedId: string | null = null;
@@ -348,8 +353,61 @@ export class GameUI {
         this.updateActionButtonStates();
     }
 
+    public setWaterStatus(
+        status: {
+            level: number;
+            capacity: number;
+            available: boolean;
+            message?: string | null;
+        },
+        options?: { force?: boolean }
+    ): void {
+        const capacity = Math.max(status.capacity, 0.0001);
+        const clampedLevel = clamp(status.level, 0, capacity);
+        const nextMessage = status.message ?? null;
+        const force = options?.force ?? false;
+
+        const changed =
+            this.waterLevel !== clampedLevel ||
+            this.waterCapacity !== capacity ||
+            this.waterAvailable !== status.available ||
+            this.waterStatusMessage !== nextMessage;
+
+        if (!changed && !force) {
+            return;
+        }
+
+        this.waterLevel = clampedLevel;
+        this.waterCapacity = capacity;
+        this.waterAvailable = status.available;
+        this.waterStatusMessage = nextMessage;
+
+        if (this.currentMode === 'water') {
+            if (!this.waterAvailable) {
+                this.showModeMessage(this.waterStatusMessage ?? 'Reservoir empty', true);
+            } else if (this.waterStatusMessage) {
+                this.showModeMessage(this.waterStatusMessage, true);
+            } else {
+                this.clearModeMessage();
+            }
+        }
+
+        this.updateActionButtonStates();
+        this.requestRedraw();
+    }
+
     public syncMode(mode: ActionMode): void {
         this.setMode(mode, { notify: false });
+    }
+
+    public requestModeChange(mode: ActionMode): void {
+        if (mode === this.currentMode) {
+            return;
+        }
+        if (!this.isModeAvailable(mode)) {
+            return;
+        }
+        this.setMode(mode, { notify: true });
     }
 
     public showModeMessage(message: string, persist = false): void {
@@ -425,7 +483,7 @@ export class GameUI {
 
         const isMobile = this.width <= 720;
         const infoBarWidth = clamp(this.width * 0.7, 260, 420);
-        const infoBarHeight = isMobile ? 60 : 72;
+        const infoBarHeight = isMobile ? 88 : 112;
         const infoBarX = (this.width - infoBarWidth) / 2;
         const infoBarY = isMobile ? 24 : 48;
 
@@ -602,9 +660,9 @@ export class GameUI {
         ctx.restore();
 
         const paddingX = 28;
-        const centerY = rect.y + rect.height / 2;
-        const gap = 48;
-        const iconSize = 30;
+        const centerY = rect.y + rect.height * 0.34;
+        const gap = Math.max(40, rect.width * 0.12);
+        const iconSize = Math.round(rect.height * 0.36);
 
         const seedPulse = this.getPulseStyle(this.seedPulse, now);
         const fruitPulse = this.getPulseStyle(this.fruitPulse, now);
@@ -631,6 +689,22 @@ export class GameUI {
             x: fruitX,
             scale: fruitPulse.scale,
             color: fruitPulse.color
+        });
+
+        const meterWidth = rect.width - paddingX * 2;
+        const meterHeight = Math.round(Math.max(14, rect.height * 0.26));
+        const meterBottomSpacing = Math.round(Math.max(6, rect.height * 0.08));
+        const meterX = rect.x + paddingX;
+        const meterY = rect.y + rect.height - meterHeight - meterBottomSpacing;
+        const ratio = clamp(this.waterLevel / this.waterCapacity, 0, 1);
+        this.drawWaterMeter(ctx, {
+            x: meterX,
+            y: meterY,
+            width: meterWidth,
+            height: meterHeight,
+            ratio,
+            available: this.waterAvailable,
+            message: this.waterStatusMessage
         });
     }
 
@@ -665,6 +739,79 @@ export class GameUI {
         ctx.restore();
     }
 
+    private drawWaterMeter(
+        ctx: CanvasRenderingContext2D,
+        options: {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            ratio: number;
+            available: boolean;
+            message: string | null;
+        }
+    ): void {
+        const { x, y, width, height, ratio, available, message } = options;
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        const roundedRatio = clamp(ratio, 0, 1);
+        const statusText = message ?? (available ? `${Math.round(roundedRatio * 100)}%` : 'Empty');
+
+        ctx.save();
+        const radius = height / 2;
+        const meterRect: Rect = { x, y, width, height };
+
+        ctx.beginPath();
+        drawRoundedRect(ctx, meterRect, radius);
+        ctx.fillStyle = 'rgba(24, 48, 40, 0.16)';
+        ctx.fill();
+
+        ctx.save();
+        ctx.beginPath();
+        drawRoundedRect(ctx, meterRect, radius);
+        ctx.clip();
+
+        const fillWidth = roundedRatio <= 0 ? 0 : Math.max(radius, width * roundedRatio);
+        if (fillWidth > 0) {
+            const gradient = ctx.createLinearGradient(x, y, x, y + height);
+            if (available) {
+                gradient.addColorStop(0, 'rgba(124, 206, 255, 0.95)');
+                gradient.addColorStop(1, 'rgba(68, 142, 220, 0.95)');
+            } else {
+                gradient.addColorStop(0, 'rgba(160, 170, 186, 0.65)');
+                gradient.addColorStop(1, 'rgba(116, 128, 150, 0.7)');
+            }
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, fillWidth, height);
+        }
+
+        ctx.restore();
+
+        const inset = Math.max(8, height * 0.3);
+        const labelCenterY = y + height / 2;
+        const labelFontSize = Math.max(11, Math.round(height * 0.6));
+
+        ctx.save();
+        ctx.font = `700 ${labelFontSize}px ${FONT_FAMILY}`;
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = available ? 'rgba(24, 48, 40, 0.82)' : 'rgba(24, 48, 40, 0.6)';
+        ctx.textAlign = 'left';
+        ctx.fillText('WATER', x + inset, labelCenterY, width * 0.55);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(statusText.toUpperCase(), x + width - inset, labelCenterY, width * 0.55);
+        ctx.restore();
+
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = available ? 'rgba(46, 104, 162, 0.8)' : 'rgba(80, 92, 112, 0.75)';
+        drawRoundedRect(ctx, meterRect, radius);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
     private getPulseStyle(pulse: PulseState | null, now: number): { scale: number; color: string } {
         const baseColor = '#183028';
         if (!pulse) {
@@ -695,8 +842,16 @@ export class GameUI {
             fill = '#ffd267';
             stroke = 'rgba(176, 126, 36, 0.8)';
         } else if (button.isActive) {
-            fill = button.mode === 'plant' ? 'rgba(173, 236, 200, 0.95)' : 'rgba(78, 216, 132, 0.95)';
-            stroke = button.mode === 'plant' ? 'rgba(48, 134, 80, 0.9)' : 'rgba(34, 114, 70, 0.9)';
+            if (button.mode === 'plant') {
+                fill = 'rgba(173, 236, 200, 0.95)';
+                stroke = 'rgba(48, 134, 80, 0.9)';
+            } else if (button.mode === 'water') {
+                fill = 'rgba(164, 214, 255, 0.95)';
+                stroke = 'rgba(46, 120, 186, 0.9)';
+            } else {
+                fill = 'rgba(78, 216, 132, 0.95)';
+                stroke = 'rgba(34, 114, 70, 0.9)';
+            }
         } else if (button.isDisabled) {
             fill = 'rgba(255, 255, 255, 0.28)';
             stroke = 'rgba(31, 61, 43, 0.18)';
@@ -1003,10 +1158,10 @@ export class GameUI {
             return;
         }
 
-        if (mode === 'build') {
-            this.bindings.onSeedSelected(null);
-        } else {
+        if (mode === 'plant') {
             this.bindings.onSeedSelected(this.primarySeedId ?? null);
+        } else if (mode === 'build') {
+            this.bindings.onSeedSelected(null);
         }
 
         this.bindings.onModeChanged(mode);
@@ -1050,7 +1205,10 @@ export class GameUI {
         for (const button of this.buttons) {
             const available = this.isModeAvailable(button.mode);
             const isActive = button.mode === this.currentMode;
-            const shouldDisable = !available && !isActive && !(button.mode === 'build' && this.buildPlacementActive);
+            const shouldDisable =
+                !available &&
+                (button.mode !== 'water' ? !isActive : true) &&
+                !(button.mode === 'build' && this.buildPlacementActive);
 
             button.isDisabled = shouldDisable;
             button.isPlacement = button.mode === 'build' && this.buildPlacementActive;
@@ -1066,6 +1224,10 @@ export class GameUI {
 
         if (mode === 'build') {
             return this.buildPlacementActive || this.buildAvailable;
+        }
+
+        if (mode === 'water') {
+            return this.waterAvailable;
         }
 
         return false;

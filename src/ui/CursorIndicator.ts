@@ -5,9 +5,11 @@ export type CursorState =
     | 'plant'
     | 'plant-disabled'
     | 'build'
-    | 'build-disabled';
+    | 'build-disabled'
+    | 'water'
+    | 'water-disabled';
 
-export type CursorGlyphKey = 'default' | 'harvest' | 'plant' | 'build';
+export type CursorGlyphKey = 'default' | 'harvest' | 'plant' | 'build' | 'water';
 
 export interface CursorVisualStyle {
     fill: string;
@@ -74,6 +76,20 @@ export const CURSOR_VISUALS: Record<CursorState, CursorVisualStyle> = {
         stroke: BASE_CURSOR_STROKE,
         glow: BASE_CURSOR_GLOW,
         glyph: DISABLED_GLYPH,
+        disabledGlyphOpacity: 0.6
+    },
+    water: {
+        fill: BASE_CURSOR_FILL,
+        stroke: BASE_CURSOR_STROKE,
+        glow: 'rgba(38, 119, 196, 0.45)',
+        glyph: 'rgba(34, 86, 152, 0.96)',
+        disabledGlyphOpacity: 0.85
+    },
+    'water-disabled': {
+        fill: BASE_CURSOR_FILL,
+        stroke: BASE_CURSOR_STROKE,
+        glow: 'rgba(64, 84, 110, 0.4)',
+        glyph: 'rgba(104, 116, 136, 0.8)',
         disabledGlyphOpacity: 0.6
     }
 };
@@ -163,6 +179,22 @@ export const CURSOR_GLYPH_PATHS: Record<
             ctx.lineTo(width / 2, height / 2);
             ctx.stroke();
         }
+    },
+    water: {
+        outer: (ctx, size) => {
+            const width = size * 0.38;
+            const height = size * 0.56;
+            ctx.beginPath();
+            ctx.moveTo(0, -height * 0.52);
+            ctx.bezierCurveTo(width * 0.78, -height * 0.02, width * 0.58, height * 0.48, 0, height * 0.52);
+            ctx.bezierCurveTo(-width * 0.58, height * 0.48, -width * 0.78, -height * 0.02, 0, -height * 0.52);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(0, -height * 0.2);
+            ctx.bezierCurveTo(width * 0.22, 0, width * 0.08, height * 0.28, 0, height * 0.34);
+            ctx.stroke();
+        }
     }
 };
 
@@ -181,6 +213,9 @@ export function toCursorGlyphKey(state: CursorState): CursorGlyphKey {
         case 'build':
         case 'build-disabled':
             return 'build';
+        case 'water':
+        case 'water-disabled':
+            return 'water';
         default:
             return 'default';
     }

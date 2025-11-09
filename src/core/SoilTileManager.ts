@@ -23,6 +23,8 @@ import {
 const TILE_HEIGHT = 0.1;
 export const TILE_SIZE = 1.4;
 export const TILE_CHAMFER = 0.16;
+const SOIL_TILE_COLOR = 0xb68a4a;
+const SOIL_TILE_BORDER_COLOR = 0xbd9450;
 const PREVIEW_CHAMFER = TILE_CHAMFER;
 const PREVIEW_BORDER_WIDTH = 0.08;
 const PREVIEW_BORDER_PULSE_SPEED = 2.6;
@@ -43,7 +45,7 @@ export class SoilTileManager {
         TILE_CHAMFER
     );
     private readonly tileMaterial = new MeshStandardMaterial({
-        color: 0x7b4b24,
+        color: SOIL_TILE_COLOR,
         roughness: 0.9,
         metalness: 0.05
     });
@@ -53,8 +55,8 @@ export class SoilTileManager {
         TILE_CHAMFER
     );
     private readonly tileBorderMaterial = new MeshBasicMaterial({
-        color: 0x2b1608,
-        side: DoubleSide
+        color: SOIL_TILE_BORDER_COLOR,
+        side: 2
     });
     private readonly previewFillGeometry = SoilTileManager.createChamferedPlaneGeometry(
         TILE_SIZE,

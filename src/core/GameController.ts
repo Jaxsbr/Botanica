@@ -48,6 +48,13 @@ export class GameController {
     private readonly feedback: InteractionFeedbackController;
     private readonly sound: SoundController;
     private currentMode: ActionMode = 'plant';
+    private previousPrimaryMode: Exclude<ActionMode, 'water'> = 'plant';
+    private waterStatus = {
+        level: 1,
+        capacity: 1,
+        available: true,
+        message: null as string | null
+    };
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
@@ -111,6 +118,7 @@ export class GameController {
         );
         this.updateInventoryUI();
         this.refreshBuildState();
+        this.syncWaterStatus();
 
         this.interaction = new InteractionController(
             this.renderer.domElement,
@@ -130,6 +138,7 @@ export class GameController {
 
         window.addEventListener('resize', this.handleResize);
         window.addEventListener('beforeunload', this.dispose);
+        window.addEventListener('keydown', this.handleKeyDown, true);
 
         this.handleResize();
         this.start();
@@ -139,6 +148,7 @@ export class GameController {
     public dispose = (): void => {
         window.removeEventListener('resize', this.handleResize);
         window.removeEventListener('beforeunload', this.dispose);
+        window.removeEventListener('keydown', this.handleKeyDown, true);
 
         if (this.animationHandle !== null) {
             cancelAnimationFrame(this.animationHandle);
@@ -455,6 +465,18 @@ export class GameController {
     }
 
     private showBlockedFeedback(target: HoverTarget): void {
+        if (this.currentMode === 'water') {
+            if (target.type === 'plant') {
+                this.ui.showModeMessage(
+                    this.waterStatus.available ? 'Watering coming soon' : 'Reservoir empty',
+                    true
+                );
+            } else {
+                this.ui.showModeMessage('Aim at a plant to water', false);
+            }
+            return;
+        }
+
         if (target.type === 'plant') {
             this.feedback.triggerPlantShake(target.plantId);
             this.feedback.setPlantHighlight(target.plantId, 'blocked');
@@ -510,7 +532,12 @@ export class GameController {
             return;
         }
 
+        const previousMode = this.currentMode;
         this.currentMode = mode;
+
+        if (mode !== 'water') {
+            this.previousPrimaryMode = mode;
+        }
 
         if (mode === 'plant') {
             if (!this.gameState.selectedSeedId) {
@@ -523,6 +550,13 @@ export class GameController {
         } else if (mode === 'build') {
             this.clearSeedSelection();
             this.refreshBuildState();
+        } else if (mode === 'water') {
+            this.refreshBuildState();
+            this.syncWaterStatus(true);
+        }
+
+        if (previousMode === 'water' && mode !== 'water') {
+            this.ui.clearModeMessage();
         }
 
         this.updateCursorState();
@@ -534,6 +568,81 @@ export class GameController {
         if (this.currentMode === 'build') {
             this.refreshBuildState();
         }
+    }
+
+    private handleKeyDown = (event: KeyboardEvent): void => {
+        if (event.defaultPrevented || event.repeat) {
+            return;
+        }
+
+        if (event.metaKey || event.ctrlKey || event.altKey) {
+            return;
+        }
+
+        const target = event.target as HTMLElement | null;
+        if (target) {
+            const tagName = target.tagName;
+            if (
+                tagName === 'INPUT' ||
+                tagName === 'TEXTAREA' ||
+                tagName === 'SELECT' ||
+                target.isContentEditable
+            ) {
+                return;
+            }
+        }
+
+        const key = event.key.toLowerCase();
+        if (key !== 'w') {
+            return;
+        }
+
+        event.preventDefault();
+        this.toggleWaterMode();
+    };
+
+    private toggleWaterMode(): void {
+        if (this.currentMode === 'water') {
+            const fallbacks: Exclude<ActionMode, 'water'>[] = [
+                this.previousPrimaryMode,
+                'plant',
+                'build'
+            ];
+            const tried = new Set<ActionMode>();
+            for (const mode of fallbacks) {
+                if (tried.has(mode)) {
+                    continue;
+                }
+                tried.add(mode);
+                this.ui.requestModeChange(mode);
+                if (this.currentMode !== 'water') {
+                    return;
+                }
+            }
+            return;
+        }
+
+        if (!this.waterStatus.available) {
+            this.waterStatus.message = this.waterStatus.message ?? 'Reservoir empty';
+            this.syncWaterStatus(false);
+            return;
+        }
+
+        this.previousPrimaryMode = this.currentMode as Exclude<ActionMode, 'water'>;
+
+        this.ui.requestModeChange('water');
+    }
+
+    private syncWaterStatus(force = false): void {
+        this.ui.setWaterStatus(
+            {
+                level: this.waterStatus.level,
+                capacity: this.waterStatus.capacity,
+                available: this.waterStatus.available,
+                message: this.waterStatus.message
+            },
+            force ? { force: true } : undefined
+        );
     }
 
     private clearSeedSelection(): void {
@@ -616,7 +725,13 @@ export class GameController {
         if (hover.type === 'plant') {
             const plant = this.gameState.plants.get(hover.plantId);
             const harvestReady = plant?.currentPhase === GrowthPhase.Fruitburst;
-            nextState = harvestReady ? 'harvest' : 'harvest-disabled';
+            if (harvestReady) {
+                nextState = 'harvest';
+            } else if (this.currentMode === 'water') {
+                nextState = this.waterStatus.available ? 'water' : 'water-disabled';
+            } else {
+                nextState = 'harvest-disabled';
+            }
         } else if (this.currentMode === 'build') {
             const canAfford = this.canAffordNextSoil();
             if (hover.type === 'preview') {
@@ -632,6 +747,8 @@ export class GameController {
             } else {
                 nextState = this.hasSeedsAvailable() ? 'plant' : 'plant-disabled';
             }
+        } else if (this.currentMode === 'water') {
+            nextState = this.waterStatus.available ? 'water' : 'water-disabled';
         }
 
         this.ui.setCursorState(nextState);
