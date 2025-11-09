@@ -15,7 +15,7 @@ export type HoverTarget =
     | { type: 'soil'; tile: SoilTile }
     | { type: 'preview'; previewTileId: string };
 
-export type DragIntent = 'harvest' | 'plant' | 'build';
+export type DragIntent = 'harvest' | 'plant' | 'build' | 'water';
 
 export interface DragIntentRequest {
     target: HoverTarget;
@@ -189,10 +189,12 @@ export class InteractionController {
         }
 
         const targetKey = this.getTargetKey(hoverTarget);
-        if (this.activeDrag.visited.has(targetKey)) {
-            return;
+        if (this.activeDrag.baseIntent !== 'water') {
+            if (this.activeDrag.visited.has(targetKey)) {
+                return;
+            }
+            this.activeDrag.visited.add(targetKey);
         }
-        this.activeDrag.visited.add(targetKey);
 
         const request: DragIntentRequest = {
             target: hoverTarget,

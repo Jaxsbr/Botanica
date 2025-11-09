@@ -14,6 +14,12 @@ import {
     PlantState,
     TILE_SPACING
 } from './GameState';
+import {
+    WATER_PLANT_ABSORB_MULTIPLIER,
+    WATER_PLANT_DECAY_RATE_PER_SECOND,
+    WATER_PLANT_FULL_THRESHOLD,
+    WATER_PLANT_GROWTH_MULTIPLIER
+} from '../config/gameBalance';
 import { PlantVisual } from '../environment/plants/PlantVisual';
 
 const PHASE_SEQUENCE: GrowthPhase[] = [
@@ -30,10 +36,10 @@ const LUMEN_BLOOM_DEFINITION: PlantDefinition = {
     fruitYield: 3,
     seedYield: 2,
     growthDurationsMs: {
-        [GrowthPhase.Seedling]: 4000,
-        [GrowthPhase.Sproutspire]: 5000,
-        [GrowthPhase.VerdantCrown]: 6000,
-        [GrowthPhase.Bloomflare]: 7000,
+        [GrowthPhase.Seedling]: 12000,
+        [GrowthPhase.Sproutspire]: 12000,
+        [GrowthPhase.VerdantCrown]: 12000,
+        [GrowthPhase.Bloomflare]: 12000,
         [GrowthPhase.Fruitburst]: 0
     }
 };
@@ -91,7 +97,11 @@ export class PlantManager {
             plantedAt: timestamp,
             currentPhase: GrowthPhase.Seedling,
             phaseStartedAt: timestamp,
-            tileId
+            tileId,
+            waterLevel: 0,
+            isFullyWatered: false,
+            lastWateredAt: 0,
+            lastWaterLevelUpdate: timestamp
         };
 
         const visual = new PlantVisual(GrowthPhase.Seedling);
@@ -190,6 +200,7 @@ export class PlantManager {
                 continue;
             }
 
+            this.updatePlantWaterState(plant, currentTime);
             this.advancePhaseIfNeeded(plant, definition, currentTime);
 
             const visual = this.visualsByPlantId.get(plant.id);
@@ -197,6 +208,8 @@ export class PlantManager {
                 continue;
             }
 
+            const saturation = Math.min(plant.waterLevel / WATER_PLANT_FULL_THRESHOLD, 1);
+            visual.setWateredState(saturation, plant.isFullyWatered);
             visual.update(currentTime);
         }
 
@@ -255,8 +268,11 @@ export class PlantManager {
             return;
         }
 
+        const growthMultiplier = this.getGrowthMultiplier(plant);
+        const effectiveDuration = phaseDuration / Math.max(growthMultiplier, 0.0001);
+
         const elapsed = currentTime - plant.phaseStartedAt;
-        if (elapsed < phaseDuration) {
+        if (elapsed < effectiveDuration) {
             return;
         }
 
@@ -328,5 +344,96 @@ export class PlantManager {
         burst.mesh.removeFromParent();
         const material = burst.mesh.material as MeshBasicMaterial;
         material.dispose();
+    }
+
+    public getPlantWorldPosition(plantId: string): Vector3 | null {
+        const visual = this.visualsByPlantId.get(plantId);
+        if (!visual) {
+            return null;
+        }
+
+        return visual.group.position.clone();
+    }
+
+    public applyWaterInRadius(
+        position: Vector3,
+        radius: number,
+        amount: number,
+        timestamp: number
+    ): PlantState[] {
+        if (amount <= 0) {
+            return [];
+        }
+
+        const affected: PlantState[] = [];
+        const radiusSq = radius * radius;
+
+        for (const plant of this.gameState.plants.values()) {
+            const visual = this.visualsByPlantId.get(plant.id);
+            if (!visual) {
+                continue;
+            }
+
+            const distanceSq = visual.group.position.distanceToSquared(position);
+            if (distanceSq > radiusSq) {
+                continue;
+            }
+
+            if (this.applyWaterToPlant(plant, amount, timestamp)) {
+                affected.push(plant);
+            }
+        }
+
+        return affected;
+    }
+
+    private updatePlantWaterState(plant: PlantState, currentTime: number): void {
+        this.refreshPlantWaterLevel(plant, currentTime);
+    }
+
+    private applyWaterToPlant(plant: PlantState, amount: number, timestamp: number): boolean {
+        if (amount <= 0) {
+            return false;
+        }
+
+        this.refreshPlantWaterLevel(plant, timestamp);
+
+        const previousLevel = plant.waterLevel;
+        const wasFullyWatered = plant.isFullyWatered;
+
+        const absorbed = amount * WATER_PLANT_ABSORB_MULTIPLIER;
+        plant.waterLevel = Math.min(previousLevel + absorbed, WATER_PLANT_FULL_THRESHOLD);
+        plant.lastWateredAt = timestamp;
+        plant.isFullyWatered = plant.waterLevel >= WATER_PLANT_FULL_THRESHOLD - 0.0001;
+
+        if (plant.isFullyWatered) {
+            plant.waterLevel = WATER_PLANT_FULL_THRESHOLD;
+        }
+
+        return plant.waterLevel !== previousLevel || plant.isFullyWatered !== wasFullyWatered;
+    }
+
+    private refreshPlantWaterLevel(plant: PlantState, timestamp: number): void {
+        if (plant.isFullyWatered) {
+            plant.waterLevel = WATER_PLANT_FULL_THRESHOLD;
+            plant.lastWaterLevelUpdate = timestamp;
+            return;
+        }
+
+        const elapsedSeconds = (timestamp - plant.lastWaterLevelUpdate) / 1000;
+        if (elapsedSeconds > 0) {
+            const decay = WATER_PLANT_DECAY_RATE_PER_SECOND * elapsedSeconds;
+            plant.waterLevel = Math.max(0, plant.waterLevel - decay);
+
+            if (plant.waterLevel < WATER_PLANT_FULL_THRESHOLD) {
+                plant.isFullyWatered = false;
+            }
+        }
+
+        plant.lastWaterLevelUpdate = timestamp;
+    }
+
+    private getGrowthMultiplier(plant: PlantState): number {
+        return plant.isFullyWatered ? WATER_PLANT_GROWTH_MULTIPLIER : 1;
     }
 }

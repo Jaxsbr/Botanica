@@ -27,24 +27,24 @@ Watering increases growth speed and opens up future upgrade and automation possi
 - [x] Update cursor rules to support Water Mode state.
 
 #### 2. Core Watering Mechanic
-- [ ] While in Water Mode:
+- [x] While in Water Mode:
   - **Mouse down / touch hold** drains water bar.
   - Emit **droplet particles** in a circular area under the cursor.
   - Tiles in range receive water (respecting AOE upgrades later).
-- [ ] Tune droplet height/arc for natural look (tweak values in a shared constants file).
+- [x] Tune droplet height/arc for natural look (tweak values in a shared constants file).
 
 #### 3. Plant Integration
-- [ ] Plants track **current water level** and **fully watered status**.
-- [ ] Fully watered plants:
+- [x] Plants track **current water level** and **fully watered status**.
+- [x] Fully watered plants:
   - Increase growth rate (e.g. +25–50% speed).
   - Show particle/sparkle effect to indicate boosted growth.
   - Display a **subtle water saturation indicator** (icon or color overlay).
-- [ ] Water level slowly decreases over time (prepares for automation systems later).
+- [x] Water level slowly decreases over time (prepares for automation systems later).
 
 #### 4. Feedback & UX
-- [ ] Add watering sound effects and light splash particles.
-- [ ] Cursor switches to a watering can icon in Water Mode.
-- [ ] Use disabled cursor and greyed-out button if no water available.
+- [x] Add watering sound effects and light splash particles.
+- [x] Cursor switches to a watering can icon in Water Mode.
+- [x] Use disabled cursor and greyed-out button if no water available.
 
 #### 5. Balancing Variables
 - `waterDrainRate` per second (base: 10%)

@@ -107,9 +107,13 @@ export class PlantVisual {
     private transition: TransitionState | null = null;
     private readonly transitionParticles: TransitionParticle[] = [];
     private readonly transitionParticleGeometry = new SphereGeometry(0.06, 14, 12);
-    private readonly materialBaseEmissive = new WeakMap<MeshStandardMaterial, number>();
+    private readonly materialBaseEmissiveIntensity = new WeakMap<MeshStandardMaterial, number>();
     private harvestGlowIntensity = 0;
     private shakeState: { startTime: number } | null = null;
+    private readonly waterIndicator: Group;
+    private readonly waterIndicatorBaseY: number;
+    private waterIndicatorLatched = false;
+    private waterIndicatorPulseStart: number | null = null;
 
     constructor(initialPhase: GrowthPhase) {
         this.group = new Group();
@@ -122,6 +126,13 @@ export class PlantVisual {
 
         this.createPhaseVisuals();
         this.applyPhaseImmediately(initialPhase);
+
+        this.waterIndicator = this.createWaterIndicator();
+        this.waterIndicator.visible = false;
+        this.group.add(this.waterIndicator);
+        this.waterIndicator.position.set(-0.46, 0.22, -0.46);
+        this.waterIndicatorBaseY = this.waterIndicator.position.y;
+        this.waterIndicatorLatched = false;
     }
 
     public setPhase(phase: GrowthPhase, transitionStartMs?: number): void {
@@ -190,6 +201,8 @@ export class PlantVisual {
         if (this.transition) {
             this.updateTransition(currentTimeMs, pulse, plantingScale);
             this.updateTransitionParticles(currentTimeMs);
+            this.applyHarvestGlow(activeVisual);
+            this.updateWaterIndicator(currentTimeMs);
             return;
         }
 
@@ -197,6 +210,7 @@ export class PlantVisual {
         const finalScale = activeVisual.baseScale * pulse * plantingScale * glowScale;
         activeVisual.group.scale.setScalar(finalScale);
         this.applyHarvestGlow(activeVisual);
+        this.updateWaterIndicator(currentTimeMs);
         this.updateShake(currentTimeMs);
         this.updateTransitionParticles(currentTimeMs);
     }
@@ -229,6 +243,23 @@ export class PlantVisual {
 
     public setHarvestGlow(intensity: number): void {
         this.harvestGlowIntensity = Math.min(Math.max(intensity, 0), 1);
+    }
+
+    public setWateredState(_saturation: number, fullyWatered: boolean): void {
+        if (fullyWatered) {
+            if (!this.waterIndicatorLatched) {
+                this.waterIndicatorLatched = true;
+                this.waterIndicatorPulseStart = performance.now();
+                this.waterIndicator.position.y = this.waterIndicatorBaseY;
+                this.waterIndicator.scale.setScalar(1);
+            }
+            this.waterIndicator.visible = true;
+        } else if (!this.waterIndicatorLatched) {
+            this.waterIndicator.visible = false;
+            this.waterIndicatorPulseStart = null;
+            this.waterIndicator.position.y = this.waterIndicatorBaseY;
+            this.waterIndicator.scale.setScalar(1);
+        }
     }
 
     public playShake(): void {
@@ -264,6 +295,45 @@ export class PlantVisual {
                 interactiveMeshes
             });
         }
+    }
+
+    private createWaterIndicator(): Group {
+        const group = new Group();
+
+        const dropletColor = new Color(0x6ec9ff);
+        const dropletMaterial = new MeshStandardMaterial({
+            color: dropletColor,
+            roughness: 0.3,
+            metalness: 0.12,
+            emissive: new Color(0x3aa9ff),
+            emissiveIntensity: 0.18
+        });
+
+        const bulb = new Mesh(new SphereGeometry(0.08, 18, 16), dropletMaterial);
+        bulb.position.y = 0.08;
+        group.add(bulb);
+
+        const tipMaterial = dropletMaterial.clone();
+        const tip = new Mesh(new ConeGeometry(0.07, 0.12, 16), tipMaterial);
+        tip.rotation.x = Math.PI;
+        tip.position.y = -0.015;
+        group.add(tip);
+
+        const base = new Mesh(
+            new CylinderGeometry(0.12, 0.12, 0.018, 18),
+            new MeshStandardMaterial({
+                color: new Color(0xb3e6ff),
+                roughness: 0.8,
+                metalness: 0.05,
+                transparent: true,
+                opacity: 0.55
+            })
+        );
+        base.position.y = -0.09;
+        group.add(base);
+
+        group.scale.setScalar(0.85);
+        return group;
     }
 
     private buildPhaseGroup(phase: GrowthPhase, blueprint: PhaseBlueprint): {
@@ -502,16 +572,35 @@ export class PlantVisual {
                 return;
             }
 
-            const material = mesh.material as MeshStandardMaterial;
-            if (!material || !(material instanceof MeshStandardMaterial)) {
-                return;
-            }
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of materials) {
+                if (!(mat instanceof MeshStandardMaterial)) {
+                    continue;
+                }
 
-            const base =
-                this.materialBaseEmissive.get(material) ?? material.emissiveIntensity ?? 0;
-            this.materialBaseEmissive.set(material, base);
-            material.emissiveIntensity = base + targetBoost;
+                const base =
+                    this.materialBaseEmissiveIntensity.get(mat) ?? mat.emissiveIntensity ?? 0;
+                this.materialBaseEmissiveIntensity.set(mat, base);
+                mat.emissiveIntensity = base + targetBoost;
+            }
         });
+    }
+
+    private updateWaterIndicator(currentTimeMs: number): void {
+        if (!this.waterIndicator.visible) {
+            return;
+        }
+
+        if (this.waterIndicatorPulseStart === null) {
+            this.waterIndicatorPulseStart = currentTimeMs;
+        }
+
+        const elapsed = currentTimeMs - this.waterIndicatorPulseStart;
+        const scale = 1 + Math.sin(elapsed / 220) * 0.08;
+        this.waterIndicator.scale.setScalar(scale);
+
+        const bob = Math.sin(elapsed / 320) * 0.05;
+        this.waterIndicator.position.y = this.waterIndicatorBaseY + bob;
     }
 
     private updateShake(currentTimeMs: number): void {
@@ -533,7 +622,7 @@ export class PlantVisual {
     }
 
     private trackMaterial(material: MeshStandardMaterial): MeshStandardMaterial {
-        this.materialBaseEmissive.set(material, material.emissiveIntensity ?? 0);
+        this.materialBaseEmissiveIntensity.set(material, material.emissiveIntensity ?? 0);
         return material;
     }
 

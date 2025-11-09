@@ -21,6 +21,10 @@ export interface PlantState {
     currentPhase: GrowthPhase;
     phaseStartedAt: number;
     tileId: string;
+    waterLevel: number;
+    isFullyWatered: boolean;
+    lastWateredAt: number;
+    lastWaterLevelUpdate: number;
 }
 
 export interface GridPosition {

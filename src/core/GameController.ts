@@ -14,7 +14,8 @@ import {
     GrowthPhase,
     Inventory,
     PlantState,
-    SoilTile
+    SoilTile,
+    TILE_SPACING
 } from './GameState';
 import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
@@ -31,6 +32,14 @@ import {
 import { CursorState } from '../ui/CursorIndicator';
 import { InteractionFeedbackController } from '../environment/feedback/InteractionFeedbackController';
 import { SoundController } from '../audio/SoundController';
+import {
+    WATER_APPLICATION_RADIUS_TILES,
+    WATER_DRAIN_RATE_PER_SECOND,
+    WATER_RESERVOIR_CAPACITY,
+    WATER_RESERVOIR_MIN_LEVEL,
+    WATER_RESERVOIR_REFILL_DELAY_MS,
+    WATER_RESERVOIR_REFILL_RATE_PER_SECOND
+} from '../config/gameBalance';
 
 const SOIL_TILE_COST_FRUIT = 5;
 
@@ -50,16 +59,29 @@ export class GameController {
     private currentMode: ActionMode = 'plant';
     private previousPrimaryMode: Exclude<ActionMode, 'water'> = 'plant';
     private waterStatus = {
-        level: 1,
-        capacity: 1,
+        level: WATER_RESERVOIR_CAPACITY,
+        capacity: WATER_RESERVOIR_CAPACITY,
         available: true,
         message: null as string | null
     };
+    private readonly waterRadiusWorld = WATER_APPLICATION_RADIUS_TILES * TILE_SPACING;
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
     private availableBuildPositions: Map<string, GridPosition> = new Map();
     private activeDrag: { intent: DragIntent; exhausted: boolean } | null = null;
+    private wateringState: {
+        active: boolean;
+        pointerId: number | null;
+        targetPlantId: string | null;
+        lastUpdateTimeMs: number;
+    } = {
+            active: false,
+            pointerId: null,
+            targetPlantId: null,
+            lastUpdateTimeMs: performance.now()
+        };
+    private waterRefillResumeTimeMs: number | null = null;
     private hoverTarget: HoverTarget = { type: 'none' };
     private highlightedSoilId: string | null = null;
     private highlightedPlantId: string | null = null;
@@ -214,7 +236,8 @@ export class GameController {
         this.animationHandle = requestAnimationFrame(renderLoop);
     }
 
-    private update(currentTime: number, _delta: number): void {
+    private update(currentTime: number, delta: number): void {
+        this.updateWatering(currentTime, delta);
         this.plantManager.update(currentTime);
         this.soilTileManager.updatePlacementPreviews(currentTime);
         this.feedback.update(currentTime);
@@ -228,6 +251,16 @@ export class GameController {
             if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
                 return 'harvest';
             }
+
+            const wantsWater =
+                this.currentMode === 'water' ||
+                baseIntent === 'water' ||
+                (this.activeDrag?.intent === 'water' && baseIntent === undefined);
+
+            if (wantsWater && this.waterStatus.available) {
+                return 'water';
+            }
+
             return null;
         }
 
@@ -291,6 +324,15 @@ export class GameController {
             return;
         }
 
+        if (event.resolvedIntent === 'water' && event.target.type === 'plant') {
+            this.beginWatering(
+                event.pointerId,
+                event.target.plantId,
+                event.nativeEvent.timeStamp ?? performance.now()
+            );
+            return;
+        }
+
         if (event.resolvedIntent === 'build' && event.target.type === 'preview') {
             const built = this.executeBuild(event.target.previewTileId);
             if (!built) {
@@ -321,6 +363,15 @@ export class GameController {
             return;
         }
 
+        if (event.resolvedIntent === 'water' && event.target.type === 'plant') {
+            this.continueWatering(
+                event.pointerId,
+                event.target.plantId,
+                event.nativeEvent.timeStamp ?? performance.now()
+            );
+            return;
+        }
+
         if (event.resolvedIntent === 'build' && event.target.type === 'preview') {
             const built = this.executeBuild(event.target.previewTileId);
             if (!built && this.activeDrag) {
@@ -334,6 +385,8 @@ export class GameController {
 
     private handleDragEnd = (event: DragEndEvent): void => {
         this.activeDrag = null;
+        const timestamp = event.nativeEvent ? event.nativeEvent.timeStamp : performance.now();
+        this.endWatering(event.pointerId, timestamp);
         if (event.reason === 'cancelled') {
             this.feedback.clearAll();
             this.highlightedSoilId = null;
@@ -466,11 +519,10 @@ export class GameController {
 
     private showBlockedFeedback(target: HoverTarget): void {
         if (this.currentMode === 'water') {
-            if (target.type === 'plant') {
-                this.ui.showModeMessage(
-                    this.waterStatus.available ? 'Watering coming soon' : 'Reservoir empty',
-                    true
-                );
+            if (!this.waterStatus.available) {
+                this.ui.showModeMessage('Reservoir empty', true);
+            } else if (target.type === 'plant') {
+                this.ui.showModeMessage('Hold to water', false);
             } else {
                 this.ui.showModeMessage('Aim at a plant to water', false);
             }
@@ -557,6 +609,7 @@ export class GameController {
 
         if (previousMode === 'water' && mode !== 'water') {
             this.ui.clearModeMessage();
+            this.feedback.stopWateringStream();
         }
 
         this.updateCursorState();
@@ -752,6 +805,175 @@ export class GameController {
         }
 
         this.ui.setCursorState(nextState);
+    }
+
+    private updateWatering(currentTime: number, deltaMs: number): void {
+        const deltaSeconds = Math.max(deltaMs, 0) / 1000;
+        let statusChanged = false;
+        let messageChanged = false;
+
+        const wateringPosition = this.getWateringPosition();
+
+        if (this.wateringState.active) {
+            if (!wateringPosition) {
+                this.endWatering(this.wateringState.pointerId, currentTime);
+                this.feedback.stopWateringStream();
+            } else {
+                this.feedback.updateWateringStream(wateringPosition, currentTime);
+            }
+        } else {
+            this.feedback.stopWateringStream();
+        }
+
+        if (this.wateringState.active && this.wateringState.targetPlantId) {
+            if (this.waterStatus.level <= WATER_RESERVOIR_MIN_LEVEL) {
+                if (this.waterStatus.available) {
+                    this.waterStatus.available = false;
+                    statusChanged = true;
+                }
+                if (this.waterStatus.message !== 'Reservoir empty') {
+                    this.waterStatus.message = 'Reservoir empty';
+                    messageChanged = true;
+                }
+                this.endWatering(this.wateringState.pointerId, currentTime);
+            } else {
+                const drainAmount = WATER_DRAIN_RATE_PER_SECOND * deltaSeconds;
+                if (drainAmount > 0) {
+                    const previousLevel = this.waterStatus.level;
+                    const consumed = Math.min(drainAmount, this.waterStatus.level - WATER_RESERVOIR_MIN_LEVEL);
+                    if (consumed > 0) {
+                        this.waterStatus.level = Math.max(
+                            WATER_RESERVOIR_MIN_LEVEL,
+                            this.waterStatus.level - consumed
+                        );
+                        statusChanged = statusChanged || this.waterStatus.level !== previousLevel;
+                        this.markReservoirUsed(currentTime);
+                        if (wateringPosition) {
+                            this.applyWaterAtTarget(consumed, currentTime, wateringPosition);
+                        }
+                    }
+
+                    if (this.waterStatus.level <= WATER_RESERVOIR_MIN_LEVEL + 0.00001) {
+                        this.waterStatus.level = WATER_RESERVOIR_MIN_LEVEL;
+                        this.waterStatus.available = false;
+                        this.waterStatus.message = 'Reservoir empty';
+                        statusChanged = true;
+                        messageChanged = true;
+                        this.endWatering(this.wateringState.pointerId, currentTime);
+                    }
+                }
+            }
+        } else {
+            if (this.waterStatus.level < this.waterStatus.capacity) {
+                if (this.waterRefillResumeTimeMs === null) {
+                    this.waterRefillResumeTimeMs = currentTime + WATER_RESERVOIR_REFILL_DELAY_MS;
+                }
+
+                if (currentTime >= (this.waterRefillResumeTimeMs ?? 0)) {
+                    const previousLevel = this.waterStatus.level;
+                    const refillAmount = WATER_RESERVOIR_REFILL_RATE_PER_SECOND * deltaSeconds;
+                    if (refillAmount > 0) {
+                        this.waterStatus.level = Math.min(
+                            this.waterStatus.capacity,
+                            this.waterStatus.level + refillAmount
+                        );
+                        statusChanged = statusChanged || this.waterStatus.level !== previousLevel;
+                    }
+
+                    if (this.waterStatus.level >= this.waterStatus.capacity - 0.00001) {
+                        this.waterStatus.level = this.waterStatus.capacity;
+                        if (!this.waterStatus.available) {
+                            this.waterStatus.available = true;
+                            statusChanged = true;
+                        }
+                        if (this.waterStatus.message) {
+                            this.waterStatus.message = null;
+                            messageChanged = true;
+                        }
+                        this.waterRefillResumeTimeMs = null;
+                    }
+                }
+            } else if (!this.waterStatus.available) {
+                this.waterStatus.available = true;
+                statusChanged = true;
+            }
+        }
+
+        if (this.waterStatus.level > WATER_RESERVOIR_MIN_LEVEL && !this.wateringState.active) {
+            if (!this.waterStatus.available) {
+                this.waterStatus.available = true;
+                statusChanged = true;
+            }
+            if (this.waterStatus.message) {
+                this.waterStatus.message = null;
+                messageChanged = true;
+            }
+        }
+
+        if (statusChanged || messageChanged) {
+            this.syncWaterStatus();
+            this.updateCursorState();
+        }
+    }
+
+    private markReservoirUsed(timestamp: number): void {
+        this.waterRefillResumeTimeMs = timestamp + WATER_RESERVOIR_REFILL_DELAY_MS;
+    }
+
+    private getWateringPosition(): Vector3 | null {
+        const plantId = this.wateringState.targetPlantId;
+        if (!plantId) {
+            return null;
+        }
+
+        return this.plantManager.getPlantWorldPosition(plantId);
+    }
+
+    private applyWaterAtTarget(amount: number, timestamp: number, position: Vector3): void {
+        this.plantManager.applyWaterInRadius(position, this.waterRadiusWorld, amount, timestamp);
+    }
+
+    private beginWatering(pointerId: number, plantId: string, timestamp: number): void {
+        if (!this.waterStatus.available) {
+            this.waterStatus.message = this.waterStatus.message ?? 'Reservoir empty';
+            this.syncWaterStatus();
+            return;
+        }
+
+        this.wateringState.active = true;
+        this.wateringState.pointerId = pointerId;
+        this.wateringState.targetPlantId = plantId;
+        this.wateringState.lastUpdateTimeMs = timestamp;
+        this.markReservoirUsed(timestamp);
+
+        if (this.waterStatus.message) {
+            this.waterStatus.message = null;
+            this.syncWaterStatus();
+        }
+    }
+
+    private continueWatering(pointerId: number, plantId: string, timestamp: number): void {
+        if (!this.wateringState.active || this.wateringState.pointerId !== pointerId) {
+            this.beginWatering(pointerId, plantId, timestamp);
+            return;
+        }
+
+        this.wateringState.targetPlantId = plantId;
+        this.wateringState.lastUpdateTimeMs = timestamp;
+        this.markReservoirUsed(timestamp);
+    }
+
+    private endWatering(pointerId: number | null, timestamp: number): void {
+        if (!this.wateringState.active || this.wateringState.pointerId !== pointerId) {
+            return;
+        }
+
+        this.wateringState.active = false;
+        this.wateringState.pointerId = null;
+        this.wateringState.targetPlantId = null;
+        this.wateringState.lastUpdateTimeMs = timestamp;
+        this.markReservoirUsed(timestamp);
+        this.feedback.stopWateringStream();
     }
 
     private canPlantOnTile(tile: SoilTile): boolean {
