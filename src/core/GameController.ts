@@ -28,7 +28,7 @@ import {
     HoverTarget,
     InteractionController
 } from '../input/InteractionController';
-import { CursorIndicator, CursorState } from '../ui/CursorIndicator';
+import { CursorState } from '../ui/CursorIndicator';
 import { InteractionFeedbackController } from '../environment/feedback/InteractionFeedbackController';
 import { SoundController } from '../audio/SoundController';
 
@@ -45,7 +45,6 @@ export class GameController {
     private readonly plantManager: PlantManager;
     private readonly ui: GameUI;
     private readonly interaction: InteractionController;
-    private readonly cursorIndicator: CursorIndicator;
     private readonly feedback: InteractionFeedbackController;
     private readonly sound: SoundController;
     private currentMode: ActionMode = 'plant';
@@ -77,6 +76,8 @@ export class GameController {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderer.shadowMap.enabled = true;
+        this.renderer.autoClear = false;
+        this.renderer.setClearColor(this.scene.background as Color, 1);
         this.renderer.domElement.classList.add('game-canvas');
         this.container.appendChild(this.renderer.domElement);
 
@@ -92,11 +93,10 @@ export class GameController {
 
         this.plantManager = new PlantManager(this.scene, this.gameState);
 
-        this.cursorIndicator = new CursorIndicator(this.renderer.domElement);
         this.feedback = new InteractionFeedbackController(this.scene, this.soilTileManager, this.plantManager);
         this.sound = new SoundController();
 
-        this.ui = new GameUI({
+        this.ui = new GameUI(this.renderer, {
             onModeChanged: (mode) => this.handleModeChanged(mode),
             onSeedSelected: (seedId) => this.handleSeedSelection(seedId)
         });
@@ -195,7 +195,9 @@ export class GameController {
             this.lastFrameTime = now;
 
             this.update(now, delta);
+            this.renderer.clear();
             this.renderer.render(this.scene, this.camera);
+            this.ui.render(now);
             this.animationHandle = requestAnimationFrame(renderLoop);
         };
 
@@ -345,6 +347,7 @@ export class GameController {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        this.ui.handleResize(width, height);
     };
 
     private executePlant(tileId: string, timestamp: number): boolean {
@@ -607,16 +610,31 @@ export class GameController {
     }
 
     private updateCursorState(): void {
+        const hover = this.hoverTarget;
         let nextState: CursorState = 'default';
 
-        if (this.currentMode === 'plant') {
-            nextState = this.hasSeedsAvailable() ? 'plant' : 'plant-disabled';
+        if (hover.type === 'plant') {
+            const plant = this.gameState.plants.get(hover.plantId);
+            const harvestReady = plant?.currentPhase === GrowthPhase.Fruitburst;
+            nextState = harvestReady ? 'harvest' : 'harvest-disabled';
         } else if (this.currentMode === 'build') {
-            const canBuild = this.availableBuildPositions.size > 0 && this.canAffordNextSoil();
-            nextState = canBuild ? 'build' : 'build-disabled';
+            const canAfford = this.canAffordNextSoil();
+            if (hover.type === 'preview') {
+                const canPlace = this.availableBuildPositions.has(hover.previewTileId) && canAfford;
+                nextState = canPlace ? 'build' : 'build-disabled';
+            } else {
+                const hasPlacement = this.availableBuildPositions.size > 0;
+                nextState = hasPlacement && canAfford ? 'build' : 'build-disabled';
+            }
+        } else if (this.currentMode === 'plant') {
+            if (hover.type === 'soil') {
+                nextState = this.canPlantOnTile(hover.tile) ? 'plant' : 'plant-disabled';
+            } else {
+                nextState = this.hasSeedsAvailable() ? 'plant' : 'plant-disabled';
+            }
         }
 
-        this.cursorIndicator.setState(nextState);
+        this.ui.setCursorState(nextState);
     }
 
     private canPlantOnTile(tile: SoilTile): boolean {

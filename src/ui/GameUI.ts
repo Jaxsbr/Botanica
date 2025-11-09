@@ -1,4 +1,21 @@
-import { Inventory, PlantDefinition } from '../core/GameState';
+import type { Inventory, PlantDefinition } from '../core/GameState';
+import {
+    CanvasTexture,
+    LinearFilter,
+    Mesh,
+    MeshBasicMaterial,
+    OrthographicCamera,
+    PlaneGeometry,
+    Scene,
+    WebGLRenderer
+} from 'three';
+import {
+    CURSOR_GLYPH_PATHS,
+    CursorState,
+    POINTER_TYPES_WITH_CURSOR,
+    getCursorVisual,
+    toCursorGlyphKey
+} from './CursorIndicator';
 
 export interface SeedOption {
     id: string;
@@ -23,21 +40,121 @@ export interface GameUIBindings {
     onSeedSelected: (seedId: string | null) => void;
 }
 
-interface RootElements {
-    root: HTMLElement;
-    seedCount: HTMLElement;
-    fruitCount: HTMLElement;
-    actionButtons: Map<ActionMode, HTMLButtonElement>;
-    modeMessage: HTMLElement;
+interface Rect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+interface HudLayout {
+    infoBar: Rect;
+    messageRect: Rect;
+    dockOrigin: { x: number; y: number };
+    dockOrientation: 'horizontal' | 'vertical';
+    buttonSize: number;
+    buttonGap: number;
+}
+
+interface PulseState {
+    type: 'increase' | 'decrease';
+    startTime: number;
+    duration: number;
+}
+
+interface CanvasButton {
+    mode: ActionMode;
+    icon: string;
+    label: string;
+    rect: Rect;
+    isActive: boolean;
+    isDisabled: boolean;
+    isPlacement: boolean;
+    isHovered: boolean;
+}
+
+interface MessageState {
+    text: string;
+    alpha: number;
+    targetAlpha: number;
+    hideAt: number;
+    persist: boolean;
+}
+
+interface PointerState {
+    x: number;
+    y: number;
+    visible: boolean;
+    pressed: boolean;
+    pointerType: string;
+    clickPulseStart: number | null;
+}
+
+const COUNTER_PULSE_DURATION = 360;
+const CLICK_PULSE_DURATION = 260;
+const MESSAGE_DEFAULT_DURATION = 1600;
+const MESSAGE_FADE_SPEED = 0.015;
+const FONT_FAMILY = `'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+}
+
+function lerp(start: number, end: number, t: number): number {
+    return start + (end - start) * t;
+}
+
+function drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    rect: Rect,
+    radius: number
+): void {
+    const { x, y, width, height } = rect;
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
 }
 
 export class GameUI {
+    private readonly renderer: WebGLRenderer;
+    private readonly domElement: HTMLCanvasElement;
     private readonly bindings: GameUIBindings;
-    private readonly root: HTMLElement;
-    private readonly seedCountValue: HTMLElement;
-    private readonly fruitCountValue: HTMLElement;
-    private readonly actionButtons: Map<ActionMode, HTMLButtonElement>;
-    private readonly modeMessage: HTMLElement;
+    private readonly overlayScene: Scene;
+    private readonly overlayCamera: OrthographicCamera;
+    private readonly overlayMesh: Mesh<PlaneGeometry, MeshBasicMaterial>;
+    private readonly overlayGeometry: PlaneGeometry;
+    private readonly overlayMaterial: MeshBasicMaterial;
+    private readonly texture: CanvasTexture;
+    private readonly textureCanvas: HTMLCanvasElement;
+    private readonly textureCtx: CanvasRenderingContext2D;
+
+    private readonly previousCursor: string;
+
+    private width = 0;
+    private height = 0;
+    private devicePixelRatio = 1;
+    private layout: HudLayout = {
+        infoBar: { x: 0, y: 0, width: 0, height: 0 },
+        messageRect: { x: 0, y: 0, width: 0, height: 0 },
+        dockOrigin: { x: 0, y: 0 },
+        dockOrientation: 'vertical',
+        buttonSize: 0,
+        buttonGap: 0
+    };
+
+    private buttons: CanvasButton[] = [];
+    private buttonMap: Map<ActionMode, CanvasButton> = new Map();
+    private hoverButton: CanvasButton | null = null;
+    private activeButton: CanvasButton | null = null;
 
     private currentMode: ActionMode = 'plant';
     private lastSeedTotal = 0;
@@ -46,48 +163,153 @@ export class GameUI {
     private buildAvailable = false;
     private buildPlacementActive = false;
     private seedOptions: SeedOption[] = [];
+    private lastInventory: Inventory | null = null;
     private primarySeedId: string | null = null;
-    private messageTimeout: number | null = null;
+    private seedPulse: PulseState | null = null;
+    private fruitPulse: PulseState | null = null;
 
-    constructor(bindings: GameUIBindings) {
+    private pointer: PointerState = {
+        x: 0,
+        y: 0,
+        visible: false,
+        pressed: false,
+        pointerType: 'mouse',
+        clickPulseStart: null
+    };
+
+    private cursorState: CursorState = 'default';
+    private messageState: MessageState = {
+        text: '',
+        alpha: 0,
+        targetAlpha: 0,
+        hideAt: 0,
+        persist: false
+    };
+
+    private needsRedraw = true;
+    private destroyed = false;
+    private lastRenderTime = performance.now();
+
+    private readonly pointerMoveHandler = (event: PointerEvent): void => {
+        this.handlePointerMove(event);
+    };
+    private readonly pointerDownHandler = (event: PointerEvent): void => {
+        this.handlePointerDown(event);
+    };
+    private readonly pointerUpHandler = (event: PointerEvent): void => {
+        this.handlePointerUp(event);
+    };
+    private readonly pointerLeaveHandler = (): void => {
+        this.handlePointerLeave();
+    };
+    private readonly pointerCancelHandler = (): void => {
+        this.handlePointerCancel();
+    };
+    private readonly windowBlurHandler = (): void => {
+        this.handleWindowBlur();
+    };
+
+    constructor(renderer: WebGLRenderer, bindings: GameUIBindings) {
+        this.renderer = renderer;
+        this.domElement = renderer.domElement;
         this.bindings = bindings;
 
-        const elements = this.createRoot();
-        this.root = elements.root;
-        this.seedCountValue = elements.seedCount;
-        this.fruitCountValue = elements.fruitCount;
-        this.actionButtons = elements.actionButtons;
-        this.modeMessage = elements.modeMessage;
+        this.textureCanvas = document.createElement('canvas');
+        const context = this.textureCanvas.getContext('2d', { alpha: true });
+        if (!context) {
+            throw new Error('Unable to acquire 2D context for game UI.');
+        }
+        this.textureCtx = context;
+        this.texture = new CanvasTexture(this.textureCanvas);
+        this.texture.minFilter = LinearFilter;
+        this.texture.magFilter = LinearFilter;
+        this.texture.anisotropy = 1;
+        this.texture.needsUpdate = true;
 
-        this.attachActionHandlers();
+        this.overlayGeometry = new PlaneGeometry(2, 2);
+        this.overlayMaterial = new MeshBasicMaterial({
+            map: this.texture,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false
+        });
+        this.overlayMesh = new Mesh(this.overlayGeometry, this.overlayMaterial);
+        this.overlayScene = new Scene();
+        this.overlayScene.add(this.overlayMesh);
+        this.overlayCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+        this.previousCursor = this.domElement.style.cursor;
+        this.domElement.style.cursor = 'none';
+
+        this.domElement.addEventListener('pointermove', this.pointerMoveHandler, true);
+        this.domElement.addEventListener('pointerdown', this.pointerDownHandler, true);
+        this.domElement.addEventListener('pointerup', this.pointerUpHandler, true);
+        this.domElement.addEventListener('pointerleave', this.pointerLeaveHandler, true);
+        this.domElement.addEventListener('pointercancel', this.pointerCancelHandler, true);
+        window.addEventListener('blur', this.windowBlurHandler);
+
+        this.rebuildButtons();
         this.setMode('plant', { notify: false });
         this.updateActionButtonStates();
+    }
+
+    public destroy(): void {
+        if (this.destroyed) {
+            return;
+        }
+        this.destroyed = true;
+
+        this.domElement.style.cursor = this.previousCursor;
+
+        this.domElement.removeEventListener('pointermove', this.pointerMoveHandler, true);
+        this.domElement.removeEventListener('pointerdown', this.pointerDownHandler, true);
+        this.domElement.removeEventListener('pointerup', this.pointerUpHandler, true);
+        this.domElement.removeEventListener('pointerleave', this.pointerLeaveHandler, true);
+        this.domElement.removeEventListener('pointercancel', this.pointerCancelHandler, true);
+        window.removeEventListener('blur', this.windowBlurHandler);
+
+        this.overlayScene.remove(this.overlayMesh);
+        this.overlayGeometry.dispose();
+        this.overlayMaterial.dispose();
+        this.texture.dispose();
+        this.buttons.length = 0;
+        this.buttonMap.clear();
     }
 
     public setSeedOptions(options: SeedOption[], _definitions: Map<string, PlantDefinition>): void {
         this.seedOptions = options.slice();
         this.primarySeedId = null;
+        this.updatePrimarySeedSelection(this.lastInventory);
         this.updateActionButtonStates();
+        this.requestRedraw();
     }
 
     public updateInventory(inventory: Inventory, _definitions: Map<string, PlantDefinition>): void {
+        this.lastInventory = inventory;
         let totalSeeds = 0;
         for (const count of Object.values(inventory.seeds)) {
             totalSeeds += count;
         }
 
         const seedDiff = totalSeeds - this.lastSeedTotal;
-        this.seedCountValue.textContent = `${totalSeeds}`;
         if (seedDiff !== 0) {
-            this.animateCounter(this.seedCountValue, seedDiff);
+            this.seedPulse = {
+                type: seedDiff > 0 ? 'increase' : 'decrease',
+                startTime: performance.now(),
+                duration: COUNTER_PULSE_DURATION
+            };
+            this.requestRedraw();
         }
         this.lastSeedTotal = totalSeeds;
 
         const fruitDiff = inventory.fruit - this.lastFruitCount;
-        this.fruitCountValue.textContent = `${inventory.fruit}`;
         if (fruitDiff !== 0) {
-            this.animateCounter(this.fruitCountValue, fruitDiff);
+            this.fruitPulse = {
+                type: fruitDiff > 0 ? 'increase' : 'decrease',
+                startTime: performance.now(),
+                duration: COUNTER_PULSE_DURATION
+            };
+            this.requestRedraw();
         }
         this.lastFruitCount = inventory.fruit;
 
@@ -96,7 +318,12 @@ export class GameUI {
     }
 
     public triggerFruitPulse(): void {
-        this.animateCounter(this.fruitCountValue, 1);
+        this.fruitPulse = {
+            type: 'increase',
+            startTime: performance.now(),
+            duration: COUNTER_PULSE_DURATION
+        };
+        this.requestRedraw();
     }
 
     public setBuildState(options: {
@@ -110,7 +337,7 @@ export class GameUI {
 
         if (options.message) {
             this.showModeMessage(options.message, true);
-        } else {
+        } else if (!this.buildPlacementActive) {
             this.clearModeMessage();
         }
 
@@ -126,27 +353,629 @@ export class GameUI {
     }
 
     public showModeMessage(message: string, persist = false): void {
-        if (this.messageTimeout !== null) {
-            window.clearTimeout(this.messageTimeout);
-            this.messageTimeout = null;
+        const now = performance.now();
+        this.messageState.text = message;
+        this.messageState.persist = persist;
+        this.messageState.targetAlpha = 1;
+        this.messageState.hideAt = persist ? Number.POSITIVE_INFINITY : now + MESSAGE_DEFAULT_DURATION;
+        this.requestRedraw();
+    }
+
+    public clearModeMessage(): void {
+        this.messageState.persist = false;
+        this.messageState.targetAlpha = 0;
+        this.messageState.hideAt = 0;
+        this.requestRedraw();
+    }
+
+    public handleResize(width: number, height: number): void {
+        this.width = Math.max(0, Math.floor(width));
+        this.height = Math.max(0, Math.floor(height));
+        this.devicePixelRatio = clamp(window.devicePixelRatio ?? 1, 1, 2);
+
+        const pixelWidth = Math.max(1, Math.round(this.width * this.devicePixelRatio));
+        const pixelHeight = Math.max(1, Math.round(this.height * this.devicePixelRatio));
+
+        if (this.textureCanvas.width !== pixelWidth || this.textureCanvas.height !== pixelHeight) {
+            this.textureCanvas.width = pixelWidth;
+            this.textureCanvas.height = pixelHeight;
+            this.texture.needsUpdate = true;
         }
 
-        this.modeMessage.textContent = message;
-        this.modeMessage.classList.add('is-visible');
+        this.updateLayout();
+        this.requestRedraw();
+    }
 
-        if (persist) {
+    public render(currentTime: number): void {
+        if (this.destroyed || this.width === 0 || this.height === 0) {
             return;
         }
 
-        this.messageTimeout = window.setTimeout(() => {
-            this.clearModeMessage();
-        }, 1600);
+        const now = currentTime;
+        const delta = now - this.lastRenderTime;
+        this.lastRenderTime = now;
+
+        const animating = this.advanceAnimations(now, delta);
+        if (this.needsRedraw || animating) {
+            this.draw(now);
+            this.texture.needsUpdate = true;
+            this.needsRedraw = false;
+        }
+
+        this.renderer.clearDepth();
+        this.renderer.render(this.overlayScene, this.overlayCamera);
     }
 
-    public destroy(): void {
-        this.clearModeMessage();
-        this.root.remove();
-        this.actionButtons.clear();
+    public setCursorState(state: CursorState): void {
+        if (this.cursorState === state) {
+            return;
+        }
+        this.cursorState = state;
+        this.requestRedraw();
+    }
+
+    private requestRedraw(): void {
+        this.needsRedraw = true;
+    }
+
+    private updateLayout(): void {
+        if (this.width === 0 || this.height === 0) {
+            return;
+        }
+
+        const isMobile = this.width <= 720;
+        const infoBarWidth = clamp(this.width * 0.7, 260, 420);
+        const infoBarHeight = isMobile ? 60 : 72;
+        const infoBarX = (this.width - infoBarWidth) / 2;
+        const infoBarY = isMobile ? 24 : 48;
+
+        this.layout.infoBar = {
+            x: infoBarX,
+            y: infoBarY,
+            width: infoBarWidth,
+            height: infoBarHeight
+        };
+
+        const buttonSize = isMobile ? 76 : 96;
+        const buttonGap = isMobile ? 18 : 24;
+        const dockWidth = isMobile
+            ? buttonSize * ACTION_CONFIG.length + buttonGap * (ACTION_CONFIG.length - 1)
+            : buttonSize;
+        const dockHeight = isMobile
+            ? buttonSize
+            : buttonSize * ACTION_CONFIG.length + buttonGap * (ACTION_CONFIG.length - 1);
+
+        const dockX = isMobile
+            ? (this.width - dockWidth) / 2
+            : this.width - buttonSize - (isMobile ? 24 : 64);
+        const dockY = isMobile
+            ? this.height - buttonSize - 32
+            : (this.height - dockHeight) / 2;
+
+        this.layout.dockOrigin = { x: dockX, y: dockY };
+        this.layout.dockOrientation = isMobile ? 'horizontal' : 'vertical';
+        this.layout.buttonSize = buttonSize;
+        this.layout.buttonGap = buttonGap;
+
+        const messageWidth = isMobile ? clamp(this.width * 0.8, 200, 320) : 260;
+        const messageHeight = isMobile ? 64 : 72;
+        const messageX = isMobile
+            ? (this.width - messageWidth) / 2
+            : dockX - messageWidth - 36;
+        const messageY = isMobile
+            ? Math.max(infoBarY + infoBarHeight + 18, dockY - messageHeight - 24)
+            : dockY + dockHeight / 2 - messageHeight / 2;
+
+        this.layout.messageRect = {
+            x: messageX,
+            y: messageY,
+            width: messageWidth,
+            height: messageHeight
+        };
+
+        this.rebuildButtons();
+        this.requestRedraw();
+    }
+
+    private rebuildButtons(): void {
+        const newButtons: CanvasButton[] = [];
+        const orientation = this.layout.dockOrientation;
+        let cursorX = this.layout.dockOrigin.x;
+        let cursorY = this.layout.dockOrigin.y;
+
+        for (const action of ACTION_CONFIG) {
+            const previous = this.buttonMap.get(action.mode);
+            const rect: Rect = {
+                x: cursorX,
+                y: cursorY,
+                width: this.layout.buttonSize,
+                height: this.layout.buttonSize
+            };
+
+            const button: CanvasButton = {
+                mode: action.mode,
+                icon: action.icon,
+                label: action.label,
+                rect,
+                isActive: previous?.isActive ?? action.mode === this.currentMode,
+                isDisabled: previous?.isDisabled ?? false,
+                isPlacement: previous?.isPlacement ?? false,
+                isHovered: previous?.isHovered ?? false
+            };
+
+            newButtons.push(button);
+            this.buttonMap.set(action.mode, button);
+
+            if (orientation === 'horizontal') {
+                cursorX += this.layout.buttonSize + this.layout.buttonGap;
+            } else {
+                cursorY += this.layout.buttonSize + this.layout.buttonGap;
+            }
+        }
+
+        this.buttons = newButtons;
+    }
+
+    private advanceAnimations(now: number, delta: number): boolean {
+        let animating = false;
+
+        if (this.seedPulse && now - this.seedPulse.startTime >= this.seedPulse.duration) {
+            this.seedPulse = null;
+            this.requestRedraw();
+        } else if (this.seedPulse) {
+            animating = true;
+        }
+
+        if (this.fruitPulse && now - this.fruitPulse.startTime >= this.fruitPulse.duration) {
+            this.fruitPulse = null;
+            this.requestRedraw();
+        } else if (this.fruitPulse) {
+            animating = true;
+        }
+
+        if (
+            !this.messageState.persist &&
+            this.messageState.hideAt > 0 &&
+            now >= this.messageState.hideAt
+        ) {
+            this.messageState.targetAlpha = 0;
+            this.messageState.hideAt = 0;
+        }
+
+        const alphaDelta = this.messageState.targetAlpha - this.messageState.alpha;
+        if (Math.abs(alphaDelta) > 0.001) {
+            const step = alphaDelta * clamp(delta * MESSAGE_FADE_SPEED, 0, 1);
+            this.messageState.alpha = clamp(this.messageState.alpha + step, 0, 1);
+            animating = true;
+            this.requestRedraw();
+        } else if (this.messageState.alpha !== this.messageState.targetAlpha) {
+            this.messageState.alpha = this.messageState.targetAlpha;
+            this.requestRedraw();
+        }
+
+        if (this.pointer.clickPulseStart !== null) {
+            const progress = (now - this.pointer.clickPulseStart) / CLICK_PULSE_DURATION;
+            if (progress >= 1) {
+                this.pointer.clickPulseStart = null;
+            } else {
+                animating = true;
+                this.requestRedraw();
+            }
+        }
+
+        if (!this.pointer.visible && !this.pointer.pressed && this.pointer.clickPulseStart === null) {
+            // no pointer animations
+        } else if (this.pointer.pressed) {
+            animating = true;
+        }
+
+        return animating;
+    }
+
+    private draw(now: number): void {
+        const ctx = this.textureCtx;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, this.textureCanvas.width, this.textureCanvas.height);
+        ctx.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+
+        this.drawInfoBar(ctx, now);
+        this.drawActionDock(ctx);
+        this.drawModeMessage(ctx);
+        this.drawCursor(ctx, now);
+    }
+
+    private drawInfoBar(ctx: CanvasRenderingContext2D, now: number): void {
+        const rect = this.layout.infoBar;
+        if (rect.width === 0 || rect.height === 0) {
+            return;
+        }
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(16, 24, 40, 0.18)';
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 18;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        drawRoundedRect(ctx, rect, 36);
+        ctx.fill();
+        ctx.restore();
+
+        const paddingX = 28;
+        const centerY = rect.y + rect.height / 2;
+        const gap = 48;
+        const iconSize = 30;
+
+        const seedPulse = this.getPulseStyle(this.seedPulse, now);
+        const fruitPulse = this.getPulseStyle(this.fruitPulse, now);
+
+        const seedX = rect.x + paddingX;
+        this.drawCounter(ctx, {
+            icon: '🌱',
+            label: 'Seeds',
+            value: `${this.lastSeedTotal}`,
+            centerY,
+            iconSize,
+            x: seedX,
+            scale: seedPulse.scale,
+            color: seedPulse.color
+        });
+
+        const fruitX = rect.x + rect.width / 2 + gap / 2;
+        this.drawCounter(ctx, {
+            icon: '🍓',
+            label: 'Fruit',
+            value: `${this.lastFruitCount}`,
+            centerY,
+            iconSize,
+            x: fruitX,
+            scale: fruitPulse.scale,
+            color: fruitPulse.color
+        });
+    }
+
+    private drawCounter(
+        ctx: CanvasRenderingContext2D,
+        options: {
+            icon: string;
+            label: string;
+            value: string;
+            x: number;
+            centerY: number;
+            iconSize: number;
+            scale: number;
+            color: string;
+        }
+    ): void {
+        const iconOffset = 0;
+        ctx.save();
+        ctx.font = `500 ${options.iconSize}px ${FONT_FAMILY}`;
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#183028';
+        ctx.fillText(options.icon, options.x + iconOffset, options.centerY);
+
+        const valueX = options.x + options.iconSize + 28;
+        ctx.font = `600 28px ${FONT_FAMILY}`;
+        ctx.fillStyle = options.color;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.translate(valueX, options.centerY);
+        ctx.scale(options.scale, options.scale);
+        ctx.fillText(options.value, 0, 0);
+        ctx.restore();
+    }
+
+    private getPulseStyle(pulse: PulseState | null, now: number): { scale: number; color: string } {
+        const baseColor = '#183028';
+        if (!pulse) {
+            return { scale: 1, color: baseColor };
+        }
+        const progress = clamp((now - pulse.startTime) / pulse.duration, 0, 1);
+        const curve = 1 - Math.pow(1 - progress, 3);
+        const scale = pulse.type === 'increase' ? lerp(1.12, 1, curve) : lerp(0.88, 1, curve);
+        const highlight = pulse.type === 'increase' ? '#44c776' : '#e95a5a';
+        const color = progress < 0.5 ? highlight : baseColor;
+        return { scale, color };
+    }
+
+    private drawActionDock(ctx: CanvasRenderingContext2D): void {
+        for (const button of this.buttons) {
+            this.drawActionButton(ctx, button);
+        }
+    }
+
+    private drawActionButton(ctx: CanvasRenderingContext2D, button: CanvasButton): void {
+        const rect = button.rect;
+        ctx.save();
+
+        let fill = 'rgba(255, 255, 255, 0.94)';
+        let stroke = 'rgba(31, 61, 43, 0.26)';
+
+        if (button.isPlacement) {
+            fill = '#ffd267';
+            stroke = 'rgba(176, 126, 36, 0.8)';
+        } else if (button.isActive) {
+            fill = button.mode === 'plant' ? 'rgba(173, 236, 200, 0.95)' : 'rgba(78, 216, 132, 0.95)';
+            stroke = button.mode === 'plant' ? 'rgba(48, 134, 80, 0.9)' : 'rgba(34, 114, 70, 0.9)';
+        } else if (button.isDisabled) {
+            fill = 'rgba(255, 255, 255, 0.28)';
+            stroke = 'rgba(31, 61, 43, 0.18)';
+        } else if (button.isHovered) {
+            fill = 'rgba(255, 255, 255, 0.98)';
+        }
+
+        ctx.shadowColor = button.isDisabled ? 'rgba(0,0,0,0)' : 'rgba(15, 35, 27, 0.26)';
+        ctx.shadowBlur = button.isDisabled ? 0 : 24;
+        ctx.shadowOffsetY = button.isDisabled ? 0 : 12;
+        ctx.shadowOffsetX = 0;
+
+        ctx.fillStyle = fill;
+        drawRoundedRect(ctx, rect, 22);
+        ctx.fill();
+
+        ctx.shadowColor = 'transparent';
+        if (!button.isDisabled) {
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = stroke;
+            drawRoundedRect(ctx, rect, 22);
+            ctx.stroke();
+        }
+
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+
+        const iconY = rect.y + rect.height * 0.42;
+        ctx.font = `500 ${rect.height * 0.42}px ${FONT_FAMILY}`;
+        ctx.fillStyle = button.isDisabled ? 'rgba(52, 74, 64, 0.4)' : 'rgba(31, 61, 43, 0.92)';
+        ctx.fillText(button.icon, rect.x + rect.width / 2, iconY);
+
+        ctx.font = `600 ${rect.height * 0.18}px ${FONT_FAMILY}`;
+        ctx.globalAlpha = button.isDisabled ? 0.5 : 0.9;
+        ctx.fillText(button.label.toUpperCase(), rect.x + rect.width / 2, rect.y + rect.height * 0.78);
+        ctx.restore();
+    }
+
+    private drawModeMessage(ctx: CanvasRenderingContext2D): void {
+        if (this.messageState.alpha <= 0 || !this.messageState.text) {
+            return;
+        }
+
+        const rect = this.layout.messageRect;
+        ctx.save();
+        ctx.globalAlpha = this.messageState.alpha;
+
+        ctx.shadowColor = 'rgba(24, 48, 40, 0.42)';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 12;
+
+        ctx.fillStyle = 'rgba(24, 48, 40, 0.88)';
+        drawRoundedRect(ctx, rect, 18);
+        ctx.fill();
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `500 18px ${FONT_FAMILY}`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.messageState.text, rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width - 24);
+        ctx.restore();
+    }
+
+    private drawCursor(ctx: CanvasRenderingContext2D, now: number): void {
+        if (!this.pointer.visible) {
+            return;
+        }
+
+        const style = getCursorVisual(this.cursorState);
+        const glyphKey = toCursorGlyphKey(this.cursorState);
+        const glyph = CURSOR_GLYPH_PATHS[glyphKey];
+        const radius = 28;
+        const haloRadius = radius * 1.8;
+        const scale = this.pointer.pressed ? 0.92 : 1;
+
+        ctx.save();
+        ctx.translate(this.pointer.x, this.pointer.y);
+        ctx.scale(scale, scale);
+
+        ctx.beginPath();
+        ctx.arc(0, 0, haloRadius, 0, Math.PI * 2);
+        const gradient = ctx.createRadialGradient(0, 0, radius * 0.6, 0, 0, haloRadius);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+        gradient.addColorStop(0.6, style.glow);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.globalAlpha = 0.55;
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 6;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.fillStyle = style.fill;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = style.stroke;
+        ctx.stroke();
+
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = style.glyph;
+        ctx.strokeStyle = style.glyph;
+        ctx.globalAlpha = this.cursorState.endsWith('disabled') ? style.disabledGlyphOpacity : 1;
+        const glyphSize = radius * 1.2;
+        glyph.outer(ctx, glyphSize);
+
+        if (this.pointer.clickPulseStart !== null) {
+            const progress = clamp((now - this.pointer.clickPulseStart) / CLICK_PULSE_DURATION, 0, 1);
+            ctx.globalAlpha = 1 - progress;
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = style.stroke;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius + progress * 16, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    private handlePointerMove(event: PointerEvent): void {
+        if (this.destroyed) {
+            return;
+        }
+
+        const local = this.getLocalPointer(event);
+        if (!local) {
+            this.hidePointer();
+            return;
+        }
+
+        const supportsCursor = POINTER_TYPES_WITH_CURSOR.has(event.pointerType);
+        this.pointer.pointerType = event.pointerType;
+        this.pointer.visible = supportsCursor;
+        this.pointer.x = local.x;
+        this.pointer.y = local.y;
+
+        let consumed = false;
+        if (supportsCursor) {
+            const hovered = this.hitTestButton(local.x, local.y);
+            if (hovered !== this.hoverButton) {
+                if (this.hoverButton) {
+                    this.hoverButton.isHovered = false;
+                }
+                if (hovered) {
+                    hovered.isHovered = true;
+                    consumed = true;
+                }
+                this.hoverButton = hovered;
+                this.requestRedraw();
+            } else if (hovered) {
+                consumed = true;
+            }
+        }
+
+        if (consumed) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+
+        this.requestRedraw();
+    }
+
+    private handlePointerDown(event: PointerEvent): void {
+        if (!POINTER_TYPES_WITH_CURSOR.has(event.pointerType) || event.button !== 0) {
+            return;
+        }
+
+        const local = this.getLocalPointer(event);
+        if (!local) {
+            return;
+        }
+
+        this.pointer.visible = true;
+        this.pointer.pressed = true;
+        this.pointer.x = local.x;
+        this.pointer.y = local.y;
+        this.pointer.clickPulseStart = performance.now();
+
+        const hovered = this.hitTestButton(local.x, local.y);
+        if (hovered && !hovered.isDisabled) {
+            this.activeButton = hovered;
+            event.stopPropagation();
+            event.preventDefault();
+        }
+
+        this.requestRedraw();
+    }
+
+    private handlePointerUp(event: PointerEvent): void {
+        if (!POINTER_TYPES_WITH_CURSOR.has(event.pointerType) || event.button !== 0) {
+            return;
+        }
+
+        const local = this.getLocalPointer(event);
+        if (local) {
+            this.pointer.x = local.x;
+            this.pointer.y = local.y;
+        }
+        this.pointer.pressed = false;
+
+        const hovered = local ? this.hitTestButton(local.x, local.y) : null;
+        if (this.activeButton && hovered === this.activeButton && !this.activeButton.isDisabled) {
+            this.handleModeRequest(this.activeButton.mode);
+            event.stopPropagation();
+            event.preventDefault();
+        }
+
+        this.activeButton = null;
+        this.requestRedraw();
+    }
+
+    private handlePointerLeave(): void {
+        this.hoverButton = null;
+        this.activeButton = null;
+        this.pointer.visible = false;
+        this.pointer.pressed = false;
+        this.requestRedraw();
+    }
+
+    private handlePointerCancel(): void {
+        this.activeButton = null;
+        this.pointer.pressed = false;
+        this.pointer.clickPulseStart = null;
+        this.requestRedraw();
+    }
+
+    private handleWindowBlur(): void {
+        this.pointer.visible = false;
+        this.pointer.pressed = false;
+        this.pointer.clickPulseStart = null;
+        if (this.hoverButton) {
+            this.hoverButton.isHovered = false;
+            this.hoverButton = null;
+        }
+        this.requestRedraw();
+    }
+
+    private hidePointer(): void {
+        if (this.pointer.visible || this.pointer.pressed) {
+            this.pointer.visible = false;
+            this.pointer.pressed = false;
+            this.requestRedraw();
+        }
+    }
+
+    private getLocalPointer(event: PointerEvent): { x: number; y: number } | null {
+        const rect = this.domElement.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            return null;
+        }
+
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+            return null;
+        }
+
+        return { x, y };
+    }
+
+    private hitTestButton(x: number, y: number): CanvasButton | null {
+        for (const button of this.buttons) {
+            const rect = button.rect;
+            if (
+                x >= rect.x &&
+                x <= rect.x + rect.width &&
+                y >= rect.y &&
+                y <= rect.y + rect.height
+            ) {
+                return button;
+            }
+        }
+        return null;
     }
 
     private handleModeRequest(mode: ActionMode): void {
@@ -165,13 +994,12 @@ export class GameUI {
         const { notify } = options;
         this.currentMode = mode;
 
-        for (const [buttonMode, button] of this.actionButtons.entries()) {
-            const isActive = buttonMode === mode;
-            button.classList.toggle('is-active', isActive);
-            button.setAttribute('aria-pressed', String(isActive));
+        for (const button of this.buttons) {
+            button.isActive = button.mode === mode;
         }
 
         if (!notify) {
+            this.requestRedraw();
             return;
         }
 
@@ -182,13 +1010,25 @@ export class GameUI {
         }
 
         this.bindings.onModeChanged(mode);
+        this.requestRedraw();
     }
 
-    private updatePrimarySeedSelection(inventory: Inventory): void {
+    private updatePrimarySeedSelection(inventory: Inventory | null): void {
+        const source = inventory ?? this.lastInventory;
+        if (!source) {
+            const seedChanged = this.primarySeedId !== null;
+            this.primarySeedId = null;
+            this.plantAvailable = false;
+            if (seedChanged && this.currentMode === 'plant') {
+                this.bindings.onSeedSelected(null);
+            }
+            return;
+        }
+
         let nextSeedId: string | null = null;
 
         for (const option of this.seedOptions) {
-            const count = inventory.seeds[option.id] ?? 0;
+            const count = source.seeds[option.id] ?? 0;
             if (count > 0) {
                 nextSeedId = option.id;
                 break;
@@ -207,16 +1047,16 @@ export class GameUI {
     }
 
     private updateActionButtonStates(): void {
-        for (const [mode, button] of this.actionButtons.entries()) {
-            const available = this.isModeAvailable(mode);
-            const isActive = mode === this.currentMode;
-            const shouldDisable = !available && !isActive && !(mode === 'build' && this.buildPlacementActive);
+        for (const button of this.buttons) {
+            const available = this.isModeAvailable(button.mode);
+            const isActive = button.mode === this.currentMode;
+            const shouldDisable = !available && !isActive && !(button.mode === 'build' && this.buildPlacementActive);
 
-            button.disabled = shouldDisable;
-            button.classList.toggle('is-disabled', shouldDisable);
-
-            button.classList.toggle('is-placement', mode === 'build' && this.buildPlacementActive);
+            button.isDisabled = shouldDisable;
+            button.isPlacement = button.mode === 'build' && this.buildPlacementActive;
         }
+
+        this.requestRedraw();
     }
 
     private isModeAvailable(mode: ActionMode): boolean {
@@ -230,136 +1070,5 @@ export class GameUI {
 
         return false;
     }
-
-    private animateCounter(element: HTMLElement, diff: number): void {
-        element.classList.remove('is-increase', 'is-decrease');
-        void element.getBoundingClientRect();
-
-        if (diff > 0) {
-            element.classList.add('is-increase');
-        } else if (diff < 0) {
-            element.classList.add('is-decrease');
-        }
-    }
-
-    private attachActionHandlers(): void {
-        for (const [mode, button] of this.actionButtons.entries()) {
-            button.addEventListener('click', () => {
-                this.handleModeRequest(mode);
-            });
-        }
-    }
-
-    private createRoot(): RootElements {
-        const root = document.createElement('div');
-        root.className = 'game-ui';
-
-        const infoBar = this.createInfoBar();
-        const actionDock = this.createActionDock();
-
-        const modeMessage = document.createElement('div');
-        modeMessage.className = 'game-ui__mode-message';
-        modeMessage.setAttribute('role', 'status');
-        modeMessage.setAttribute('aria-live', 'polite');
-
-        root.appendChild(infoBar.container);
-        root.appendChild(actionDock.container);
-        root.appendChild(modeMessage);
-        document.body.appendChild(root);
-
-        return {
-            root,
-            seedCount: infoBar.seedCounterValue,
-            fruitCount: infoBar.fruitCounterValue,
-            actionButtons: actionDock.buttons,
-            modeMessage
-        };
-    }
-
-    private createInfoBar(): {
-        container: HTMLElement;
-        seedCounterValue: HTMLElement;
-        fruitCounterValue: HTMLElement;
-    } {
-        const container = document.createElement('div');
-        container.className = 'game-ui__info-bar';
-
-        const seedCounter = this.createCounter('🌱', 'Seeds');
-        const fruitCounter = this.createCounter('🍓', 'Fruit');
-
-        container.appendChild(seedCounter.container);
-        container.appendChild(fruitCounter.container);
-
-        return {
-            container,
-            seedCounterValue: seedCounter.value,
-            fruitCounterValue: fruitCounter.value
-        };
-    }
-
-    private createActionDock(): {
-        container: HTMLElement;
-        buttons: Map<ActionMode, HTMLButtonElement>;
-    } {
-        const container = document.createElement('div');
-        container.className = 'game-ui__action-dock';
-
-        const buttons: Map<ActionMode, HTMLButtonElement> = new Map();
-
-        for (const action of ACTION_CONFIG) {
-            const button = this.createActionButton(action);
-            container.appendChild(button);
-            buttons.set(action.mode, button);
-        }
-
-        return { container, buttons };
-    }
-
-    private clearModeMessage(): void {
-        if (this.messageTimeout !== null) {
-            window.clearTimeout(this.messageTimeout);
-            this.messageTimeout = null;
-        }
-
-        this.modeMessage.textContent = '';
-        this.modeMessage.classList.remove('is-visible');
-    }
-
-    private createActionButton(action: ActionConfig): HTMLButtonElement {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'game-ui__action-button';
-        button.dataset.mode = action.mode;
-        button.innerHTML = `
-            <span class="game-ui__action-icon" aria-hidden="true">${action.icon}</span>
-            <span class="game-ui__action-label">${action.label}</span>
-        `;
-        button.setAttribute('aria-pressed', 'false');
-        button.setAttribute('aria-label', action.label);
-        return button;
-    }
-
-    private createCounter(
-        icon: string,
-        label: string
-    ): { container: HTMLElement; value: HTMLElement } {
-        const container = document.createElement('div');
-        container.className = 'game-ui__counter';
-        container.setAttribute('role', 'status');
-        container.setAttribute('aria-live', 'polite');
-        container.setAttribute('aria-label', label);
-
-        const iconSpan = document.createElement('span');
-        iconSpan.className = 'game-ui__counter-icon';
-        iconSpan.textContent = icon;
-
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'game-ui__counter-value';
-        valueSpan.textContent = '0';
-
-        container.appendChild(iconSpan);
-        container.appendChild(valueSpan);
-
-        return { container, value: valueSpan };
-    }
 }
+
