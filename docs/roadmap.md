@@ -70,27 +70,40 @@ All upgrades are incremental, with scaling costs and visible gameplay impact.
 ### 🔹 Deliverable Chunks
 
 #### 1. UI & Data Setup
-- [ ] Add **Upgrades button** (icon-based, accessible from main HUD).
-- [ ] Create a **dedicated upgrades panel** (scrollable or tabbed layout).
-- [ ] Define upgrades in a **data-driven JSON/config file**:
-  ```json
+- [x] Add **Upgrades button** (icon-based, accessible from main HUD).
+- [x] Create a **dedicated upgrades panel** (draggable tech tree layout with full overlay).
+  - Implemented drag-to-pan navigation for large tech trees
+  - Full-screen overlay with dark gradient background
+  - Animated parallax background with moving circular patterns
+  - Hierarchical tree layout with parent-child connections
+  - Center starting upgrade on screen when panel opens
+- [x] Define upgrades in a **data-driven config file** (`src/config/upgrades.ts`):
+  ```typescript
   {
-    "upgradeId": "watering_speed",
-    "name": "Faster Watering",
-    "description": "Reduce time needed to fully water plants.",
-    "baseCost": 20,
-    "costScale": 1.3,
-    "effectPerLevel": 0.9
+    upgradeId: "watering_speed",
+    name: "Faster Watering",
+    description: "Reduces watering time per plant.",
+    baseCost: 30,
+    costScale: 1.3,
+    effectPerLevel: 0.9
   }
-````
-
-* [ ] Display cost, current level, and upgrade effect in UI.
+  ```
+- [x] Display cost, current level, and upgrade effect in UI (cards show level, cost, name, and description).
+  - Vertical card layout with large centered icons (72px)
+  - Level indicator in top-left corner
+  - Cost in top-right corner (same font size as level)
+  - Bold title centered below icon
+  - Description centered below title with multi-line wrapping
+  - Gradient backgrounds with level-based colors
+  - Depth effects with shadows and glowing borders
+  - Hover animations and visual feedback
+  - Click-to-purchase (entire card is clickable)
 
 #### 2. Core Upgrade Logic
 
-* [ ] Deduct fruit when purchasing upgrades.
-* [ ] Store upgrade progress persistently.
-* [ ] Apply upgrade modifiers dynamically to gameplay systems.
+- [x] Deduct fruit when purchasing upgrades (via click-to-purchase on cards).
+- [ ] Store upgrade progress persistently (localStorage or save system).
+- [ ] Apply upgrade modifiers dynamically to gameplay systems (integration with game systems pending).
 
 #### 3. Upgrade Definitions (Initial Set)
 
@@ -105,9 +118,9 @@ All upgrades are incremental, with scaling costs and visible gameplay impact.
 
 #### 4. Scaling & Progression
 
-* Upgrade costs should **scale exponentially** with level (e.g., ×1.25 per level).
-* Effects **stack multiplicatively** where applicable.
-* Add visual feedback (brief flash or particle) on purchase.
+- [x] Upgrade costs scale exponentially with level (using `costScale` parameter in config).
+- [x] Effects stack multiplicatively where applicable (calculated via `effectPerLevel`).
+- [x] Add visual feedback on purchase (hover effects, card animations, border glow).
 
 #### 5. Future Extensions
 
@@ -120,8 +133,8 @@ All upgrades are incremental, with scaling costs and visible gameplay impact.
 
 ### Data-driven approach
 
-* Define upgrade parameters and costs in external data (e.g., `/data/upgrades.json`).
-* Define watering constants in `/config/gameBalance.ts`.
+- [x] Define upgrade parameters and costs in external data (`/src/config/upgrades.ts`).
+- [x] Define watering constants in `/config/gameBalance.ts`.
 
 ### Testing & Debugging
 
@@ -153,5 +166,20 @@ Later features that can build on this foundation:
 > Every upgrade should make the player’s *time investment feel more powerful*.
 
 ```
+
+---
+
+## ✅ Completed Features
+
+### FEATURE 1: Watering Mode - COMPLETE
+All deliverables have been implemented and are functional.
+
+### FEATURE 2: Upgrades System - IN PROGRESS
+- ✅ UI & Data Setup - Complete
+- ✅ Core Upgrade Logic (purchase system) - Complete
+- ✅ Upgrade Definitions - Complete (6 upgrades defined)
+- ✅ Scaling & Progression - Complete
+- ⏳ Persistent storage - Pending
+- ⏳ Gameplay system integration - Pending
 
 ---
