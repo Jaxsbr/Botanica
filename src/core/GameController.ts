@@ -20,6 +20,8 @@ import {
 import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
 import { ActionMode, GameUI } from '../ui/GameUI';
+import { UpgradesPanel } from '../ui/UpgradesPanel';
+import { UPGRADE_DEFINITIONS, calculateUpgradeCost } from '../config/upgrades';
 import {
     DragEndEvent,
     DragIntent,
@@ -53,6 +55,7 @@ export class GameController {
     private readonly soilTileManager: SoilTileManager;
     private readonly plantManager: PlantManager;
     private readonly ui: GameUI;
+    private readonly upgradesPanel: UpgradesPanel;
     private readonly interaction: InteractionController;
     private readonly feedback: InteractionFeedbackController;
     private readonly sound: SoundController;
@@ -127,8 +130,16 @@ export class GameController {
 
         this.ui = new GameUI(this.renderer, {
             onModeChanged: (mode) => this.handleModeChanged(mode),
-            onSeedSelected: (seedId) => this.handleSeedSelection(seedId)
+            onSeedSelected: (seedId) => this.handleSeedSelection(seedId),
+            onUpgradesToggle: () => this.handleUpgradesToggle()
         });
+
+        this.upgradesPanel = new UpgradesPanel(this.renderer, {
+            onUpgradePurchase: (upgradeId) => this.handleUpgradePurchase(upgradeId),
+            onClose: () => this.handleUpgradesToggle()
+        });
+        this.upgradesPanel.setVisible(false);
+        this.updateUpgradesPanel();
         this.ui.setSeedOptions(
             [
                 {
@@ -179,6 +190,7 @@ export class GameController {
 
         this.interaction.dispose();
         this.ui.destroy();
+        this.upgradesPanel.destroy();
         this.sound.dispose();
         this.plantManager.dispose();
         this.soilTileManager.dispose();
@@ -198,7 +210,8 @@ export class GameController {
             tiles: new Map<string, SoilTile>(),
             plants: new Map<string, PlantState>(),
             inventory: initialInventory,
-            selectedSeedId: null
+            selectedSeedId: null,
+            upgrades: {}
         };
     }
 
@@ -230,6 +243,7 @@ export class GameController {
             this.renderer.clear();
             this.renderer.render(this.scene, this.camera);
             this.ui.render(now);
+            this.upgradesPanel.render(now);
             this.animationHandle = requestAnimationFrame(renderLoop);
         };
 
@@ -411,6 +425,7 @@ export class GameController {
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
         this.ui.handleResize(width, height);
+        this.upgradesPanel.handleResize(width, height);
     };
 
     private executePlant(tileId: string, timestamp: number): boolean {
@@ -646,12 +661,17 @@ export class GameController {
         }
 
         const key = event.key.toLowerCase();
-        if (key !== 'w') {
+        if (key === 'w') {
+            event.preventDefault();
+            this.toggleWaterMode();
             return;
         }
 
-        event.preventDefault();
-        this.toggleWaterMode();
+        if (key === 'u') {
+            event.preventDefault();
+            this.handleUpgradesToggle();
+            return;
+        }
     };
 
     private toggleWaterMode(): void {
@@ -736,6 +756,7 @@ export class GameController {
     private updateInventoryUI(): void {
         this.ui.updateInventory(this.gameState.inventory, this.plantManager.plantDefinitions);
         this.refreshBuildState();
+        this.updateUpgradesPanel();
     }
 
     private handleHoverChanged(target: HoverTarget): void {
@@ -988,5 +1009,37 @@ export class GameController {
         const availableSeedCount =
             this.gameState.inventory.seeds[this.gameState.selectedSeedId] ?? 0;
         return availableSeedCount > 0;
+    }
+
+    private handleUpgradesToggle(): void {
+        const isVisible = this.upgradesPanel.getVisible();
+        this.upgradesPanel.setVisible(!isVisible);
+    }
+
+    private handleUpgradePurchase(upgradeId: string): void {
+        const definition = UPGRADE_DEFINITIONS.find((def) => def.upgradeId === upgradeId);
+        if (!definition) {
+            return;
+        }
+
+        const currentLevel = this.gameState.upgrades[upgradeId] ?? 0;
+        const cost = calculateUpgradeCost(definition.baseCost, definition.costScale, currentLevel);
+
+        if (this.gameState.inventory.fruit < cost) {
+            return;
+        }
+
+        this.gameState.inventory.fruit -= cost;
+        this.gameState.upgrades[upgradeId] = currentLevel + 1;
+
+        this.updateInventoryUI();
+    }
+
+    private updateUpgradesPanel(): void {
+        this.upgradesPanel.updateData(
+            UPGRADE_DEFINITIONS,
+            this.gameState.upgrades,
+            this.gameState.inventory.fruit
+        );
     }
 }

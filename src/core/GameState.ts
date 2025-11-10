@@ -48,6 +48,7 @@ export interface GameState {
     plants: Map<string, PlantState>;
     inventory: Inventory;
     selectedSeedId: string | null;
+    upgrades: Record<string, number>;
 }
 
 export interface ShopItem {

@@ -39,6 +39,7 @@ const ACTION_CONFIG: ActionConfig[] = [
 export interface GameUIBindings {
     onModeChanged: (mode: ActionMode) => void;
     onSeedSelected: (seedId: string | null) => void;
+    onUpgradesToggle: () => void;
 }
 
 interface Rect {
@@ -156,6 +157,9 @@ export class GameUI {
     private buttonMap: Map<ActionMode, CanvasButton> = new Map();
     private hoverButton: CanvasButton | null = null;
     private activeButton: CanvasButton | null = null;
+    private upgradesButton: CanvasButton | null = null;
+    private hoverUpgradesButton = false;
+    private activeUpgradesButton = false;
 
     private currentMode: ActionMode = 'plant';
     private lastSeedTotal = 0;
@@ -571,6 +575,27 @@ export class GameUI {
             }
         }
 
+        // Add upgrades button after action buttons with gap
+        const upgradesX = orientation === 'horizontal' ? cursorX + this.layout.buttonGap : this.layout.dockOrigin.x;
+        const upgradesY = orientation === 'horizontal' ? this.layout.dockOrigin.y : cursorY + this.layout.buttonGap;
+        const upgradesRect: Rect = {
+            x: upgradesX,
+            y: upgradesY,
+            width: this.layout.buttonSize,
+            height: this.layout.buttonSize
+        };
+
+        this.upgradesButton = {
+            mode: 'plant', // Dummy mode, not used for upgrades button
+            icon: '⚙️',
+            label: 'Upgrades',
+            rect: upgradesRect,
+            isActive: false,
+            isDisabled: false,
+            isPlacement: false,
+            isHovered: this.hoverUpgradesButton
+        };
+
         this.buttons = newButtons;
     }
 
@@ -829,6 +854,9 @@ export class GameUI {
         for (const button of this.buttons) {
             this.drawActionButton(ctx, button);
         }
+        if (this.upgradesButton) {
+            this.drawActionButton(ctx, this.upgradesButton);
+        }
     }
 
     private drawActionButton(ctx: CanvasRenderingContext2D, button: CanvasButton): void {
@@ -997,6 +1025,17 @@ export class GameUI {
         let consumed = false;
         if (supportsCursor) {
             const hovered = this.hitTestButton(local.x, local.y);
+            const hoveredUpgrades = this.upgradesButton ? this.hitTestRect(local.x, local.y, this.upgradesButton.rect) : false;
+
+            if (hoveredUpgrades !== this.hoverUpgradesButton) {
+                this.hoverUpgradesButton = hoveredUpgrades;
+                if (this.upgradesButton) {
+                    this.upgradesButton.isHovered = this.hoverUpgradesButton;
+                }
+                consumed = consumed || hoveredUpgrades;
+                this.requestRedraw();
+            }
+
             if (hovered !== this.hoverButton) {
                 if (this.hoverButton) {
                     this.hoverButton.isHovered = false;
@@ -1037,7 +1076,13 @@ export class GameUI {
         this.pointer.clickPulseStart = performance.now();
 
         const hovered = this.hitTestButton(local.x, local.y);
-        if (hovered && !hovered.isDisabled) {
+        const hoveredUpgrades = this.upgradesButton && this.hitTestRect(local.x, local.y, this.upgradesButton.rect);
+
+        if (hoveredUpgrades) {
+            this.activeUpgradesButton = true;
+            event.stopPropagation();
+            event.preventDefault();
+        } else if (hovered && !hovered.isDisabled) {
             this.activeButton = hovered;
             event.stopPropagation();
             event.preventDefault();
@@ -1059,19 +1104,31 @@ export class GameUI {
         this.pointer.pressed = false;
 
         const hovered = local ? this.hitTestButton(local.x, local.y) : null;
-        if (this.activeButton && hovered === this.activeButton && !this.activeButton.isDisabled) {
+        const hoveredUpgrades = local && this.upgradesButton ? this.hitTestRect(local.x, local.y, this.upgradesButton.rect) : false;
+
+        if (this.activeUpgradesButton && hoveredUpgrades) {
+            this.bindings.onUpgradesToggle();
+            event.stopPropagation();
+            event.preventDefault();
+        } else if (this.activeButton && hovered === this.activeButton && !this.activeButton.isDisabled) {
             this.handleModeRequest(this.activeButton.mode);
             event.stopPropagation();
             event.preventDefault();
         }
 
         this.activeButton = null;
+        this.activeUpgradesButton = false;
         this.requestRedraw();
     }
 
     private handlePointerLeave(): void {
         this.hoverButton = null;
         this.activeButton = null;
+        this.hoverUpgradesButton = false;
+        this.activeUpgradesButton = false;
+        if (this.upgradesButton) {
+            this.upgradesButton.isHovered = false;
+        }
         this.pointer.visible = false;
         this.pointer.pressed = false;
         this.requestRedraw();
@@ -1079,6 +1136,7 @@ export class GameUI {
 
     private handlePointerCancel(): void {
         this.activeButton = null;
+        this.activeUpgradesButton = false;
         this.pointer.pressed = false;
         this.pointer.clickPulseStart = null;
         this.requestRedraw();
@@ -1131,6 +1189,19 @@ export class GameUI {
             }
         }
         return null;
+    }
+
+    private hitTestRect(x: number, y: number, rect: Rect): boolean {
+        return (
+            x >= rect.x &&
+            x <= rect.x + rect.width &&
+            y >= rect.y &&
+            y <= rect.y + rect.height
+        );
+    }
+
+    public requestUpgradesToggle(): void {
+        this.bindings.onUpgradesToggle();
     }
 
     private handleModeRequest(mode: ActionMode): void {

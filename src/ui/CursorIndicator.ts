@@ -7,9 +7,11 @@ export type CursorState =
     | 'build'
     | 'build-disabled'
     | 'water'
-    | 'water-disabled';
+    | 'water-disabled'
+    | 'upgrades'
+    | 'upgrades-clickable';
 
-export type CursorGlyphKey = 'default' | 'harvest' | 'plant' | 'build' | 'water';
+export type CursorGlyphKey = 'default' | 'harvest' | 'plant' | 'build' | 'water' | 'upgrades';
 
 export interface CursorVisualStyle {
     fill: string;
@@ -91,6 +93,20 @@ export const CURSOR_VISUALS: Record<CursorState, CursorVisualStyle> = {
         glow: 'rgba(64, 84, 110, 0.4)',
         glyph: 'rgba(104, 116, 136, 0.8)',
         disabledGlyphOpacity: 0.6
+    },
+    upgrades: {
+        fill: BASE_CURSOR_FILL,
+        stroke: BASE_CURSOR_STROKE,
+        glow: 'rgba(88, 72, 146, 0.48)',
+        glyph: 'rgba(68, 56, 124, 0.95)',
+        disabledGlyphOpacity: 0.85
+    },
+    'upgrades-clickable': {
+        fill: BASE_CURSOR_FILL,
+        stroke: BASE_CURSOR_STROKE,
+        glow: 'rgba(78, 216, 132, 0.52)',
+        glyph: 'rgba(48, 134, 80, 0.97)',
+        disabledGlyphOpacity: 0.85
     }
 };
 
@@ -195,6 +211,29 @@ export const CURSOR_GLYPH_PATHS: Record<
             ctx.bezierCurveTo(width * 0.22, 0, width * 0.08, height * 0.28, 0, height * 0.34);
             ctx.stroke();
         }
+    },
+    upgrades: {
+        outer: (ctx, size) => {
+            const arrowLength = size * 0.5;
+            const arrowWidth = size * 0.18;
+            const headLength = size * 0.24;
+            const headWidth = size * 0.28;
+
+            // Draw arrow pointing up-right
+            ctx.beginPath();
+            ctx.moveTo(0, arrowLength * 0.3);
+            ctx.lineTo(arrowLength * 0.5, -arrowLength * 0.2);
+            ctx.lineTo(arrowWidth * 0.5, -arrowLength * 0.2);
+            ctx.lineTo(arrowWidth * 0.5, -arrowLength * 0.5);
+            ctx.lineTo(headWidth * 0.5, -arrowLength * 0.5);
+            ctx.lineTo(0, -arrowLength * 0.5 - headLength);
+            ctx.lineTo(-headWidth * 0.5, -arrowLength * 0.5);
+            ctx.lineTo(-arrowWidth * 0.5, -arrowLength * 0.5);
+            ctx.lineTo(-arrowWidth * 0.5, -arrowLength * 0.2);
+            ctx.lineTo(-arrowLength * 0.5, -arrowLength * 0.2);
+            ctx.closePath();
+            ctx.fill();
+        }
     }
 };
 
@@ -216,6 +255,9 @@ export function toCursorGlyphKey(state: CursorState): CursorGlyphKey {
         case 'water':
         case 'water-disabled':
             return 'water';
+        case 'upgrades':
+        case 'upgrades-clickable':
+            return 'upgrades';
         default:
             return 'default';
     }
