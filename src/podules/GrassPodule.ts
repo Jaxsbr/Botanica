@@ -21,6 +21,12 @@ export class GrassPodule {
         grassMesh.position.y = 0;
 
         this.group.add(grassMesh);
+
+        // Add edge vignette if available
+        const vignetteMesh = this.grassGround.getEdgeVignetteMesh();
+        if (vignetteMesh) {
+            this.group.add(vignetteMesh);
+        }
     }
 
     public addToScene(scene: THREE.Scene): void {
@@ -29,6 +35,27 @@ export class GrassPodule {
 
     public removeFromScene(scene: THREE.Scene): void {
         scene.remove(this.group);
+    }
+
+    /**
+     * Update the island radius (triggers smooth expansion animation)
+     */
+    public updateIslandRadius(radius: number): void {
+        this.grassGround.updateRadius(radius);
+    }
+
+    /**
+     * Update grass geometry (call this in animation loop for smooth expansion)
+     */
+    public update(deltaTimeMs: number): void {
+        this.grassGround.updateGeometry();
+    }
+
+    /**
+     * Get current island radius
+     */
+    public getRadius(): number {
+        return this.grassGround.getRadius();
     }
 
     public dispose(): void {

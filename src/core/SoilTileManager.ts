@@ -19,6 +19,7 @@ import {
     SoilTile,
     TILE_SPACING
 } from './GameState';
+import { WorldManager } from './WorldManager';
 
 const TILE_HEIGHT = 0.1;
 export const TILE_SIZE = 1.4;
@@ -33,6 +34,7 @@ const PREVIEW_BORDER_PULSE_INTENSITY = 0.5;
 export class SoilTileManager {
     private readonly scene: Scene;
     private readonly gameState: GameState;
+    private worldManager: WorldManager | null = null;
     private readonly tileMeshes: Map<string, Mesh> = new Map();
     private readonly tileBorderMeshes: Map<string, Mesh> = new Map();
     private readonly tileGroup: Group = new Group();
@@ -90,13 +92,21 @@ export class SoilTileManager {
     private readonly previewBorderCurrentGlowColor = new Color(0x64a0ff);
     private previewBorderPulseStart = 0;
 
-    constructor(scene: Scene, gameState: GameState) {
+    constructor(scene: Scene, gameState: GameState, worldManager?: WorldManager) {
         this.scene = scene;
         this.gameState = gameState;
+        this.worldManager = worldManager || null;
         this.tileGroup.position.y = TILE_HEIGHT / 2;
         this.previewGroup.position.y = TILE_HEIGHT + 0.005;
         this.scene.add(this.tileGroup);
         this.scene.add(this.previewGroup);
+    }
+
+    /**
+     * Set the world manager for boundary checks
+     */
+    public setWorldManager(worldManager: WorldManager): void {
+        this.worldManager = worldManager;
     }
 
     public initialize(): void {
@@ -285,6 +295,11 @@ export class SoilTileManager {
             for (const delta of deltas) {
                 const candidateId = SoilTileManager.getTileId(delta);
                 if (occupied.has(candidateId) || candidates.has(candidateId)) {
+                    continue;
+                }
+
+                // Filter by island radius if world manager is available
+                if (this.worldManager && !this.worldManager.isGridPositionWithinRadius(delta)) {
                     continue;
                 }
 

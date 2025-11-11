@@ -2,20 +2,24 @@ import {
     Camera,
     Mesh,
     Object3D,
+    Plane,
     Raycaster,
-    Vector2
+    Vector2,
+    Vector3
 } from 'three';
 import { PlantManager } from '../core/PlantManager';
 import { SoilTile } from '../core/GameState';
 import { SoilTileManager } from '../core/SoilTileManager';
+import { WorldManager } from '../core/WorldManager';
 
 export type HoverTarget =
     | { type: 'none' }
     | { type: 'plant'; plantId: string }
     | { type: 'soil'; tile: SoilTile }
-    | { type: 'preview'; previewTileId: string };
+    | { type: 'preview'; previewTileId: string }
+    | { type: 'out-of-bounds'; worldPos: { x: number; z: number } };
 
-export type DragIntent = 'harvest' | 'plant' | 'build' | 'water';
+export type DragIntent = 'harvest' | 'plant' | 'build' | 'water' | 'pan';
 
 export interface DragIntentRequest {
     target: HoverTarget;
@@ -75,19 +79,23 @@ export class InteractionController {
     private lastPointerClient: { x: number; y: number } | null = null;
     private lastHoverTarget: HoverTarget = { type: 'none' };
     private activeDrag: ActiveDrag | null = null;
+    private worldManager: WorldManager | null = null;
+    private readonly groundPlane = new Plane(new Vector3(0, 1, 0), 0); // Y-up plane at y=0
 
     constructor(
         domElement: HTMLElement,
         camera: Camera,
         soilTileManager: SoilTileManager,
         plantManager: PlantManager,
-        callbacks: InteractionCallbacks
+        callbacks: InteractionCallbacks,
+        worldManager?: WorldManager
     ) {
         this.domElement = domElement;
         this.camera = camera;
         this.soilTileManager = soilTileManager;
         this.plantManager = plantManager;
         this.callbacks = callbacks;
+        this.worldManager = worldManager || null;
 
         this.domElement.addEventListener('pointerdown', this.handlePointerDown, { passive: false });
         this.domElement.addEventListener('pointermove', this.handlePointerMove, { passive: false });
@@ -108,6 +116,13 @@ export class InteractionController {
         window.removeEventListener('keydown', this.handleKeyDown, true);
     }
 
+    /**
+     * Set the world manager for boundary checks
+     */
+    public setWorldManager(worldManager: WorldManager): void {
+        this.worldManager = worldManager;
+    }
+
     public refreshHover(): void {
         if (!this.lastPointerClient) {
             this.updateHoverTarget({ type: 'none' });
@@ -118,17 +133,23 @@ export class InteractionController {
             this.lastPointerClient.x,
             this.lastPointerClient.y
         );
-        const hoverTarget = this.resolveHoverTarget(intersection);
+        const hoverTarget = this.resolveHoverTarget(intersection, this.lastPointerClient.x, this.lastPointerClient.y);
         this.updateHoverTarget(hoverTarget);
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        if (event.button !== 0) {
-            if (this.activeDrag && event.button === 2) {
+        // Allow middle mouse button (button 1) for panning
+        if (event.button === 2) {
+            if (this.activeDrag) {
                 this.cancelActiveDrag('cancelled', event);
                 event.preventDefault();
             }
             return;
+        }
+
+        // Handle middle mouse button for panning
+        if (event.button === 1) {
+            event.preventDefault(); // Prevent default middle-click behavior
         }
 
         this.lastPointerClient = { x: event.clientX, y: event.clientY };
@@ -189,7 +210,9 @@ export class InteractionController {
         }
 
         const targetKey = this.getTargetKey(hoverTarget);
-        if (this.activeDrag.baseIntent !== 'water') {
+        // Allow panning to continue even if we've visited this target (continuous movement)
+        // Also allow water mode to continue (it's continuous)
+        if (this.activeDrag.baseIntent !== 'water' && this.activeDrag.baseIntent !== 'pan') {
             if (this.activeDrag.visited.has(targetKey)) {
                 return;
             }
@@ -292,6 +315,8 @@ export class InteractionController {
                 (target.type === 'soil' &&
                     this.lastHoverTarget.type === 'soil' &&
                     this.lastHoverTarget.tile.id === target.tile.id) ||
+                (target.type === 'out-of-bounds' &&
+                    this.lastHoverTarget.type === 'out-of-bounds') ||
                 (target.type === 'none' && this.lastHoverTarget.type === 'none'))
         ) {
             return;
@@ -303,11 +328,26 @@ export class InteractionController {
 
     private getHoverTargetAt(clientX: number, clientY: number): HoverTarget {
         const intersection = this.getFirstIntersectionAt(clientX, clientY);
-        return this.resolveHoverTarget(intersection);
+        return this.resolveHoverTarget(intersection, clientX, clientY);
     }
 
-    private resolveHoverTarget(intersection: Mesh | null): HoverTarget {
+    private resolveHoverTarget(intersection: Mesh | null, clientX: number, clientY: number): HoverTarget {
         if (!intersection) {
+            // Check if ray hits ground plane and if it's out of bounds
+            if (this.worldManager && this.updatePointer(clientX, clientY)) {
+                this.raycaster.setFromCamera(this.pointer, this.camera);
+                const ray = this.raycaster.ray;
+                const intersectionPoint = new Vector3();
+
+                if (ray.intersectPlane(this.groundPlane, intersectionPoint)) {
+                    if (!this.worldManager.isWithinRadius(intersectionPoint)) {
+                        return {
+                            type: 'out-of-bounds',
+                            worldPos: { x: intersectionPoint.x, z: intersectionPoint.z }
+                        };
+                    }
+                }
+            }
             return { type: 'none' };
         }
 
@@ -340,6 +380,10 @@ export class InteractionController {
 
         if (target.type === 'preview') {
             return `preview:${target.previewTileId}`;
+        }
+
+        if (target.type === 'out-of-bounds') {
+            return `out-of-bounds:${target.worldPos.x},${target.worldPos.z}`;
         }
 
         return 'none';

@@ -19,6 +19,7 @@ import {
 } from './GameState';
 import { SoilTileManager } from './SoilTileManager';
 import { PlantManager } from './PlantManager';
+import { WorldManager } from './WorldManager';
 import { ActionMode, GameUI } from '../ui/GameUI';
 import { UpgradesPanel } from '../ui/UpgradesPanel';
 import { UPGRADE_DEFINITIONS, calculateUpgradeCost } from '../config/upgrades';
@@ -34,6 +35,7 @@ import {
 import { CursorState } from '../ui/CursorIndicator';
 import { InteractionFeedbackController } from '../environment/feedback/InteractionFeedbackController';
 import { SoundController } from '../audio/SoundController';
+import { ParallaxBackground } from '../environment/ParallaxBackground';
 import {
     WATER_APPLICATION_RADIUS_TILES,
     WATER_DRAIN_RATE_PER_SECOND,
@@ -52,6 +54,7 @@ export class GameController {
     private readonly renderer: WebGLRenderer;
     private readonly grassPodule: GrassPodule;
     private readonly gameState: GameState;
+    private readonly worldManager: WorldManager;
     private readonly soilTileManager: SoilTileManager;
     private readonly plantManager: PlantManager;
     private readonly ui: GameUI;
@@ -59,6 +62,7 @@ export class GameController {
     private readonly interaction: InteractionController;
     private readonly feedback: InteractionFeedbackController;
     private readonly sound: SoundController;
+    private readonly parallaxBackground: ParallaxBackground;
     private currentMode: ActionMode = 'plant';
     private previousPrimaryMode: Exclude<ActionMode, 'water'> = 'plant';
     private waterStatus = {
@@ -88,6 +92,19 @@ export class GameController {
     private hoverTarget: HoverTarget = { type: 'none' };
     private highlightedSoilId: string | null = null;
     private highlightedPlantId: string | null = null;
+    private panningState: {
+        active: boolean;
+        pointerId: number | null;
+        lastMouseX: number;
+        lastMouseY: number;
+        cameraOffset: Vector3;
+    } = {
+            active: false,
+            pointerId: null,
+            lastMouseX: 0,
+            lastMouseY: 0,
+            cameraOffset: new Vector3(0, 0, 0)
+        };
 
     constructor(containerId: string = 'app') {
         const containerElement = document.getElementById(containerId);
@@ -97,7 +114,8 @@ export class GameController {
 
         this.container = containerElement;
         this.scene = new Scene();
-        this.scene.background = new Color(0xf1f5f2);
+        // Floating Garden theme: sky blue background
+        this.scene.background = new Color(0x87ceeb);
 
         this.camera = new PerspectiveCamera(60, 1, 0.1, 100);
         this.camera.position.set(0, 14, 0.001);
@@ -115,13 +133,24 @@ export class GameController {
 
         this.gameState = this.createInitialGameState();
 
+        // Create world manager first
+        this.worldManager = new WorldManager(this.gameState);
+
         this.addLighting();
+
+        // Create parallax background
+        this.parallaxBackground = new ParallaxBackground(this.scene);
 
         this.grassPodule = new GrassPodule();
         this.grassPodule.addToScene(this.scene);
 
-        this.soilTileManager = new SoilTileManager(this.scene, this.gameState);
+        // Initialize soil tile manager with world manager
+        this.soilTileManager = new SoilTileManager(this.scene, this.gameState, this.worldManager);
         this.soilTileManager.initialize();
+
+        // Update world radius after initial tile placement
+        this.worldManager.updateRadius();
+        this.grassPodule.updateIslandRadius(this.worldManager.getRadius());
 
         this.plantManager = new PlantManager(this.scene, this.gameState);
 
@@ -166,8 +195,12 @@ export class GameController {
                 onActionRejected: (request) => this.handleActionRejected(request),
                 onPointerMiss: () => this.handlePointerMiss(),
                 onHoverChanged: (target) => this.handleHoverChanged(target)
-            }
+            },
+            this.worldManager
         );
+
+        // Set up mouse tracking for parallax
+        this.renderer.domElement.addEventListener('mousemove', this.handleMouseMove);
 
         window.addEventListener('resize', this.handleResize);
         window.addEventListener('beforeunload', this.dispose);
@@ -182,6 +215,7 @@ export class GameController {
         window.removeEventListener('resize', this.handleResize);
         window.removeEventListener('beforeunload', this.dispose);
         window.removeEventListener('keydown', this.handleKeyDown, true);
+        this.renderer.domElement.removeEventListener('mousemove', this.handleMouseMove);
 
         if (this.animationHandle !== null) {
             cancelAnimationFrame(this.animationHandle);
@@ -192,6 +226,7 @@ export class GameController {
         this.ui.destroy();
         this.upgradesPanel.destroy();
         this.sound.dispose();
+        this.parallaxBackground.dispose();
         this.plantManager.dispose();
         this.soilTileManager.dispose();
         this.grassPodule.dispose();
@@ -255,10 +290,27 @@ export class GameController {
         this.plantManager.update(currentTime);
         this.soilTileManager.updatePlacementPreviews(currentTime);
         this.feedback.update(currentTime);
+
+        // Update grass expansion (radius is updated when tiles are placed, not every frame)
+        const currentRadius = this.worldManager.getRadius();
+        this.grassPodule.updateIslandRadius(currentRadius);
+        this.grassPodule.update(delta); // Pass delta in milliseconds
+
+        // Update parallax background
+        this.parallaxBackground.update();
     }
 
     private handleResolveDragIntent = (request: DragIntentRequest): DragIntent | null => {
         const { target, phase, baseIntent } = request;
+
+        // Check for panning triggers
+        const isMiddleMouse = request.nativeEvent.button === 1;
+        const isModifierHeld = request.nativeEvent.shiftKey || request.nativeEvent.ctrlKey || request.nativeEvent.metaKey;
+
+        // Priority 1: Middle mouse button or modifier key always pans (even over objects)
+        if (isMiddleMouse || isModifierHeld) {
+            return 'pan';
+        }
 
         if (target.type === 'plant') {
             const plant = this.gameState.plants.get(target.plantId);
@@ -313,6 +365,18 @@ export class GameController {
             return canAfford && this.availableBuildPositions.has(target.previewTileId) ? 'build' : null;
         }
 
+        // Allow panning on empty space or out-of-bounds areas when not over actionable targets
+        // This works in all modes, including plant/build mode
+        if (target.type === 'none' && phase === 'start' && !baseIntent) {
+            // Allow panning when clicking on empty space (grass area)
+            return 'pan';
+        }
+
+        if (target.type === 'out-of-bounds' && !isMiddleMouse && !isModifierHeld) {
+            // Allow panning on out-of-bounds areas
+            return 'pan';
+        }
+
         return null;
     };
 
@@ -322,6 +386,11 @@ export class GameController {
             intent: event.baseIntent,
             exhausted: false
         };
+
+        if (event.resolvedIntent === 'pan') {
+            this.beginPanning(event.pointerId, event.nativeEvent);
+            return;
+        }
 
         if (event.resolvedIntent === 'harvest' && event.target.type === 'plant') {
             this.executeHarvest(event.target.plantId, event.nativeEvent.timeStamp ?? performance.now());
@@ -362,6 +431,17 @@ export class GameController {
             return;
         }
 
+        // Continue panning if we started panning, regardless of what we're hovering over
+        if (this.activeDrag.intent === 'pan') {
+            this.updatePanning(event.nativeEvent);
+            return;
+        }
+
+        if (event.resolvedIntent === 'pan') {
+            this.updatePanning(event.nativeEvent);
+            return;
+        }
+
         if (event.resolvedIntent === 'harvest' && event.target.type === 'plant') {
             this.executeHarvest(event.target.plantId, event.nativeEvent.timeStamp ?? performance.now());
             return;
@@ -398,6 +478,10 @@ export class GameController {
     };
 
     private handleDragEnd = (event: DragEndEvent): void => {
+        if (this.activeDrag?.intent === 'pan') {
+            this.endPanning(event.pointerId);
+        }
+
         this.activeDrag = null;
         const timestamp = event.nativeEvent ? event.nativeEvent.timeStamp : performance.now();
         this.endWatering(event.pointerId, timestamp);
@@ -412,6 +496,16 @@ export class GameController {
 
     private handleActionRejected = (request: DragIntentRequest): void => {
         this.showBlockedFeedback(request.target);
+    };
+
+    private handleMouseMove = (event: MouseEvent): void => {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.parallaxBackground.updateMousePosition(
+            event.clientX - rect.left,
+            event.clientY - rect.top,
+            rect.width,
+            rect.height
+        );
     };
 
     private handleResize = (): void => {
@@ -490,6 +584,11 @@ export class GameController {
         this.soilTileManager.addTile(position);
         this.gameState.inventory.fruit -= SOIL_TILE_COST_FRUIT;
         this.updateInventoryUI();
+
+        // Update world radius after placing tile
+        this.worldManager.updateRadius();
+        this.grassPodule.updateIslandRadius(this.worldManager.getRadius());
+
         this.sound.play('build');
         return true;
     }
@@ -533,6 +632,12 @@ export class GameController {
     }
 
     private showBlockedFeedback(target: HoverTarget): void {
+        // Handle out-of-bounds feedback
+        if (target.type === 'out-of-bounds') {
+            this.ui.showModeMessage('Need to expand island to build here', true);
+            return;
+        }
+
         if (this.currentMode === 'water') {
             if (!this.waterStatus.available) {
                 this.ui.showModeMessage('Reservoir empty', true);
@@ -792,9 +897,100 @@ export class GameController {
         this.updateCursorState();
     }
 
+    private beginPanning(pointerId: number, event: PointerEvent): void {
+        this.panningState.active = true;
+        this.panningState.pointerId = pointerId;
+        this.panningState.lastMouseX = event.clientX;
+        this.panningState.lastMouseY = event.clientY;
+        // Store current camera offset from origin
+        this.panningState.cameraOffset.copy(this.camera.position);
+    }
+
+    private updatePanning(event: PointerEvent): void {
+        if (!this.panningState.active || this.panningState.pointerId !== event.pointerId) {
+            return;
+        }
+
+        // Calculate mouse delta in screen space
+        const deltaX = event.clientX - this.panningState.lastMouseX;
+        const deltaY = event.clientY - this.panningState.lastMouseY;
+
+        this.panningState.lastMouseX = event.clientX;
+        this.panningState.lastMouseY = event.clientY;
+
+        // Convert screen space delta to world space movement
+        // For top-down camera, we need to convert screen coordinates to world coordinates
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        if (width === 0 || height === 0) {
+            return;
+        }
+
+        // Calculate world space movement based on camera's view
+        // Camera is at y=14 looking down, so we need to project screen movement to x-z plane
+        const aspect = this.camera.aspect;
+        const fov = this.camera.fov * (Math.PI / 180);
+        const distance = Math.abs(this.camera.position.y); // Height above ground (always positive)
+        const worldHeight = 2 * Math.tan(fov / 2) * distance;
+        const worldWidth = worldHeight * aspect;
+
+        // Convert pixel movement to world movement
+        // Negative X for natural left-right panning, negative Z for natural up-down panning
+        // (drag up = move camera up = move world down, so negative Z)
+        const worldDeltaX = -(deltaX / width) * worldWidth;
+        const worldDeltaZ = -(deltaY / height) * worldHeight; // Fixed: negative for correct direction
+
+        // Update camera offset (moving in x-z plane, keeping y constant)
+        this.panningState.cameraOffset.x += worldDeltaX;
+        this.panningState.cameraOffset.z += worldDeltaZ;
+
+        // Update camera position (keep y at 14, maintain top-down view)
+        this.camera.position.set(
+            this.panningState.cameraOffset.x,
+            14, // Fixed height for top-down view
+            this.panningState.cameraOffset.z
+        );
+
+        // Update lookAt target to match camera movement (center of view moves with camera)
+        const lookAtTarget = new Vector3(
+            this.panningState.cameraOffset.x,
+            0,
+            this.panningState.cameraOffset.z
+        );
+        this.camera.lookAt(lookAtTarget);
+        this.camera.updateProjectionMatrix();
+    }
+
+    private endPanning(pointerId: number): void {
+        if (this.panningState.active && this.panningState.pointerId === pointerId) {
+            this.panningState.active = false;
+            this.panningState.pointerId = null;
+        }
+    }
+
     private updateCursorState(): void {
         const hover = this.hoverTarget;
         let nextState: CursorState = 'default';
+
+        // Handle out-of-bounds cursor state
+        if (hover.type === 'out-of-bounds') {
+            if (this.currentMode === 'build') {
+                nextState = 'build-disabled';
+            } else if (this.currentMode === 'plant') {
+                nextState = 'plant-disabled';
+            } else {
+                nextState = 'default';
+            }
+            this.ui.setCursorState(nextState);
+            return;
+        }
+
+        // Show pan cursor when hovering over empty space (when not in build/plant mode)
+        if (hover.type === 'none' && this.currentMode !== 'build' && this.currentMode !== 'plant') {
+            nextState = 'default'; // Could be 'pan' cursor in the future
+        }
 
         if (hover.type === 'plant') {
             const plant = this.gameState.plants.get(hover.plantId);
