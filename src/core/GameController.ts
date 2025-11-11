@@ -90,7 +90,6 @@ export class GameController {
         };
     private waterRefillResumeTimeMs: number | null = null;
     private hoverTarget: HoverTarget = { type: 'none' };
-    private highlightedSoilId: string | null = null;
     private highlightedPlantId: string | null = null;
     private panningState: {
         active: boolean;
@@ -487,7 +486,6 @@ export class GameController {
         this.endWatering(event.pointerId, timestamp);
         if (event.reason === 'cancelled') {
             this.feedback.clearAll();
-            this.highlightedSoilId = null;
             this.highlightedPlantId = null;
             this.refreshBuildState();
             this.interaction.refreshHover();
@@ -657,7 +655,6 @@ export class GameController {
         }
 
         if (target.type === 'soil') {
-            this.feedback.showSoilHighlight(target.tile.id, 'plant-blocked');
             this.feedback.triggerSoilShake(target.tile.id);
 
             if (target.tile.occupiedByPlantId) {
@@ -671,11 +668,6 @@ export class GameController {
         }
 
         if (target.type === 'preview') {
-            const position = this.availableBuildPositions.get(target.previewTileId);
-            if (position) {
-                const tileId = SoilTileManager.getTileId(position);
-                this.feedback.showSoilHighlight(tileId, 'build-blocked');
-            }
             if (!this.canAffordNextSoil()) {
                 this.ui.showModeMessage('Need more fruit');
             }
@@ -869,21 +861,12 @@ export class GameController {
     }
 
     private setHoverTarget(target: HoverTarget): void {
-        if (this.highlightedSoilId && (target.type !== 'soil' || target.tile.id !== this.highlightedSoilId)) {
-            this.feedback.clearSoilHighlight(this.highlightedSoilId);
-            this.highlightedSoilId = null;
-        }
-
         if (this.highlightedPlantId && (target.type !== 'plant' || target.plantId !== this.highlightedPlantId)) {
             this.feedback.setPlantHighlight(this.highlightedPlantId, 'none');
             this.highlightedPlantId = null;
         }
 
-        if (target.type === 'soil') {
-            const highlightState = this.canPlantOnTile(target.tile) ? 'plant-ready' : 'plant-blocked';
-            this.feedback.showSoilHighlight(target.tile.id, highlightState);
-            this.highlightedSoilId = target.tile.id;
-        } else if (target.type === 'plant') {
+        if (target.type === 'plant') {
             const plant = this.gameState.plants.get(target.plantId);
             if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
                 this.feedback.setPlantHighlight(target.plantId, 'harvest-ready');

@@ -1,4 +1,5 @@
 import {
+    BoxGeometry,
     Color,
     DoubleSide,
     ExtrudeGeometry,
@@ -26,6 +27,10 @@ export const TILE_SIZE = 1.4;
 export const TILE_CHAMFER = 0.16;
 const SOIL_TILE_COLOR = 0xb68a4a;
 const SOIL_TILE_BORDER_COLOR = 0xbd9450;
+const RIM_HEIGHT = 0.1;
+const RIM_WIDTH = 0.1;
+const BORDER_OFFSET = 0.005; // Small offset to raise border above soil surface to prevent clipping
+const WOOD_COLOR = 0x8B4513;
 const PREVIEW_CHAMFER = TILE_CHAMFER;
 const PREVIEW_BORDER_WIDTH = 0.08;
 const PREVIEW_BORDER_PULSE_SPEED = 2.6;
@@ -36,7 +41,6 @@ export class SoilTileManager {
     private readonly gameState: GameState;
     private worldManager: WorldManager | null = null;
     private readonly tileMeshes: Map<string, Mesh> = new Map();
-    private readonly tileBorderMeshes: Map<string, Mesh> = new Map();
     private readonly tileGroup: Group = new Group();
     private readonly previewMeshes: Map<string, Mesh> = new Map();
     private readonly previewBorderMeshes: Map<string, Mesh> = new Map();
@@ -51,14 +55,20 @@ export class SoilTileManager {
         roughness: 0.9,
         metalness: 0.05
     });
+    private readonly rimMaterial = new MeshStandardMaterial({
+        color: WOOD_COLOR,
+        roughness: 0.8,
+        metalness: 0.05
+    });
     private readonly tileBorderGeometry = SoilTileManager.createBorderGeometry(
         TILE_SIZE,
         PREVIEW_BORDER_WIDTH,
         TILE_CHAMFER
     );
-    private readonly tileBorderMaterial = new MeshBasicMaterial({
+    private readonly tileBorderMaterial = new MeshStandardMaterial({
         color: SOIL_TILE_BORDER_COLOR,
-        side: 2
+        roughness: 0.9,
+        metalness: 0.05
     });
     private readonly previewFillGeometry = SoilTileManager.createChamferedPlaneGeometry(
         TILE_SIZE,
@@ -128,22 +138,33 @@ export class SoilTileManager {
             return existingTile;
         }
 
-        const mesh = new Mesh(this.tileGeometry, this.tileMaterial);
-        mesh.position.set(position.x * TILE_SPACING, 0, position.z * TILE_SPACING);
-        mesh.castShadow = false;
-        mesh.receiveShadow = true;
-        mesh.userData.tileId = tileId;
+        // Create a group for the plot (soil + rims)
+        const plotGroup = new Group();
+        plotGroup.position.set(position.x * TILE_SPACING, 0, position.z * TILE_SPACING);
+        plotGroup.userData.tileId = tileId;
 
+        // Create soil surface (plane)
+        const soilGeometry = SoilTileManager.createChamferedPlaneGeometry(TILE_SIZE, TILE_CHAMFER);
+        const soilMesh = new Mesh(soilGeometry, this.tileMaterial);
+        // Geometry is already rotated by createChamferedPlaneGeometry
+        soilMesh.position.y = RIM_HEIGHT;
+        soilMesh.castShadow = false;
+        soilMesh.receiveShadow = true;
+        soilMesh.userData.tileId = tileId;
+        plotGroup.add(soilMesh);
+
+        // Create wooden rim (chamfered 3D border)
+        const rimMesh = this.createChamferedRim();
+        plotGroup.add(rimMesh);
+
+        // Create border mesh (for visual border effect) - raised slightly above soil surface to prevent clipping
         const borderMesh = new Mesh(this.tileBorderGeometry, this.tileBorderMaterial);
-        borderMesh.position.set(
-            position.x * TILE_SPACING,
-            TILE_HEIGHT * 1.6, // height above soil tile
-            position.z * TILE_SPACING
-        );
+        borderMesh.position.set(0, RIM_HEIGHT + BORDER_OFFSET, 0); // Raised above soil surface
         borderMesh.castShadow = false;
-        borderMesh.receiveShadow = false;
+        borderMesh.receiveShadow = true; // Enable shadow receiving so plant shadows render on top
         borderMesh.userData.tileId = tileId;
-        borderMesh.renderOrder = mesh.renderOrder;
+        borderMesh.renderOrder = soilMesh.renderOrder + 1; // Render above soil
+        plotGroup.add(borderMesh);
 
         const tile: SoilTile = {
             id: tileId,
@@ -151,10 +172,9 @@ export class SoilTileManager {
             occupiedByPlantId: null
         };
 
-        this.tileGroup.add(mesh);
-        this.tileGroup.add(borderMesh);
-        this.tileMeshes.set(tileId, mesh);
-        this.tileBorderMeshes.set(tileId, borderMesh);
+        this.tileGroup.add(plotGroup);
+        // Store the soil mesh for intersection detection
+        this.tileMeshes.set(tileId, soilMesh);
         this.gameState.tiles.set(tileId, tile);
 
         return tile;
@@ -324,14 +344,14 @@ export class SoilTileManager {
         this.tileGroup.removeFromParent();
         this.previewGroup.removeFromParent();
         this.tileMeshes.clear();
-        this.tileBorderMeshes.clear();
         this.previewMeshes.clear();
         this.previewBorderMeshes.clear();
         this.tileGeometry.dispose();
         this.previewFillGeometry.dispose();
         this.previewBorderGeometry.dispose();
-        this.tileMaterial.dispose();
         this.tileBorderGeometry.dispose();
+        this.tileMaterial.dispose();
+        this.rimMaterial.dispose();
         this.tileBorderMaterial.dispose();
         this.previewFillMaterial.dispose();
         this.previewBorderMaterial.dispose();
@@ -412,6 +432,42 @@ export class SoilTileManager {
         geometry.rotateX(-Math.PI / 2);
         geometry.translate(0, height / 2, 0);
         return geometry;
+    }
+
+    /**
+     * Creates a 3D chamfered rim that follows the tile's chamfered shape
+     * The rim is a vertical wall around the tile perimeter
+     */
+    private createChamferedRim(): Mesh {
+        const outerHalfSize = TILE_SIZE / 2;
+        const innerHalfSize = outerHalfSize - RIM_WIDTH;
+
+        // Create outer chamfered shape (in X-Z plane, horizontal)
+        const outerShape = SoilTileManager.createChamferedRectangleShape(outerHalfSize, TILE_CHAMFER);
+
+        // Create inner chamfered shape (hole) for the rim
+        const innerChamfer = Math.max(TILE_CHAMFER - RIM_WIDTH, 0);
+        const innerPath = SoilTileManager.createChamferedRectanglePath(innerHalfSize, innerChamfer);
+        outerShape.holes.push(innerPath);
+
+        // Extrude along Y axis (vertical) to create the wall height
+        // ExtrudeGeometry extrudes along +Z by default, so we'll rotate after
+        const rimGeometry = new ExtrudeGeometry(outerShape, {
+            depth: RIM_HEIGHT,
+            bevelEnabled: false
+        });
+
+        // Rotate 90 degrees around X to make the shape vertical (X-Y plane)
+        // Then the extrusion (which was along Z) becomes vertical (along Y)
+        rimGeometry.rotateX(Math.PI / 2);
+        // Position so bottom is at y=0, top is at y=RIM_HEIGHT
+        rimGeometry.translate(0, RIM_HEIGHT / 2, 0);
+
+        const rimMesh = new Mesh(rimGeometry, this.rimMaterial);
+        rimMesh.castShadow = true;
+        rimMesh.receiveShadow = true;
+
+        return rimMesh;
     }
 
 }
