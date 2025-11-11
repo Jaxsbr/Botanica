@@ -168,6 +168,7 @@ export class GameUI {
     private buildAvailable = false;
     private buildPlacementActive = false;
     private waterAvailable = true;
+    private waterUnlocked = true;
     private waterLevel = 1;
     private waterCapacity = 1;
     private waterStatusMessage: string | null = null;
@@ -1288,6 +1289,13 @@ export class GameUI {
         this.requestRedraw();
     }
 
+    public setWaterUnlocked(unlocked: boolean): void {
+        if (this.waterUnlocked !== unlocked) {
+            this.waterUnlocked = unlocked;
+            this.updateActionButtonStates();
+        }
+    }
+
     private isModeAvailable(mode: ActionMode): boolean {
         if (mode === 'plant') {
             return this.plantAvailable;
@@ -1298,7 +1306,7 @@ export class GameUI {
         }
 
         if (mode === 'water') {
-            return this.waterAvailable;
+            return this.waterUnlocked && this.waterAvailable;
         }
 
         return false;

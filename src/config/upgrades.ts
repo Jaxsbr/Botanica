@@ -10,6 +10,15 @@ export interface UpgradeDefinition {
 
 export const UPGRADE_DEFINITIONS: UpgradeDefinition[] = [
     {
+        upgradeId: 'water_plants',
+        name: 'Water Plants',
+        description: 'Allows watering plants to increase growth rate.',
+        baseCost: 0,
+        costScale: 1.0,
+        effectPerLevel: 1,
+        icon: '💦'
+    },
+    {
         upgradeId: 'drag_planting',
         name: 'Bulk Planting',
         description: 'Enables click-drag to plant multiple seeds.',

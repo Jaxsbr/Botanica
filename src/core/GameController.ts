@@ -71,7 +71,7 @@ export class GameController {
         available: true,
         message: null as string | null
     };
-    private readonly waterRadiusWorld = WATER_APPLICATION_RADIUS_TILES * TILE_SPACING;
+    private waterRadiusWorld = WATER_APPLICATION_RADIUS_TILES * TILE_SPACING;
 
     private animationHandle: number | null = null;
     private lastFrameTime = performance.now();
@@ -207,7 +207,14 @@ export class GameController {
 
         this.handleResize();
         this.start();
+        this.updateWaterCapacity();
+        this.updateWaterAOE();
+        this.updateWaterUnlockStatus();
         this.updateCursorState();
+
+        // Initialize water status with correct capacity
+        this.waterStatus.capacity = this.getWaterCapacity();
+        this.waterStatus.level = this.waterStatus.capacity;
     }
 
     public dispose = (): void => {
@@ -314,6 +321,12 @@ export class GameController {
         if (target.type === 'plant') {
             const plant = this.gameState.plants.get(target.plantId);
             if (plant && plant.currentPhase === GrowthPhase.Fruitburst) {
+                // For drag operations, require drag_harvesting upgrade
+                // Check if this is a drag: either we have an active drag, or baseIntent is set (user initiated drag)
+                const isDragOperation = this.activeDrag?.intent === 'harvest' || (baseIntent === 'harvest' && phase === 'move');
+                if (isDragOperation && !this.hasUpgrade('drag_harvesting')) {
+                    return null;
+                }
                 return 'harvest';
             }
 
@@ -322,7 +335,8 @@ export class GameController {
                 baseIntent === 'water' ||
                 (this.activeDrag?.intent === 'water' && baseIntent === undefined);
 
-            if (wantsWater && this.waterStatus.available) {
+            // Check if water_plants upgrade is purchased
+            if (wantsWater && this.waterStatus.available && this.hasUpgrade('water_plants')) {
                 return 'water';
             }
 
@@ -335,6 +349,13 @@ export class GameController {
             }
 
             if (this.currentMode !== 'plant' && !baseIntent) {
+                return null;
+            }
+
+            // For drag operations, require drag_planting upgrade
+            // Check if this is a drag: either we have an active drag, or baseIntent is set (user initiated drag)
+            const isDragOperation = this.activeDrag?.intent === 'plant' || (baseIntent === 'plant' && phase === 'move');
+            if (isDragOperation && !this.hasUpgrade('drag_planting')) {
                 return null;
             }
 
@@ -360,6 +381,13 @@ export class GameController {
                 return null;
             }
 
+            // For drag operations, require drag_building upgrade
+            // Check if this is a drag: either we have an active drag, or baseIntent is set (user initiated drag)
+            const isDragOperation = this.activeDrag?.intent === 'build' || (baseIntent === 'build' && phase === 'move');
+            if (isDragOperation && !this.hasUpgrade('drag_building')) {
+                return null;
+            }
+
             const canAfford = this.gameState.inventory.fruit >= SOIL_TILE_COST_FRUIT;
             return canAfford && this.availableBuildPositions.has(target.previewTileId) ? 'build' : null;
         }
@@ -381,6 +409,32 @@ export class GameController {
 
     private handleDragStart = (event: DragStartEvent): void => {
         void this.sound.unlock();
+
+        // Check if drag operations require upgrades and block if not purchased
+        if (event.resolvedIntent === 'plant' && !this.hasUpgrade('drag_planting')) {
+            // Allow single click but prevent drag continuation
+            if (event.target.type === 'soil') {
+                this.executePlant(event.target.tile.id, event.nativeEvent.timeStamp ?? performance.now());
+            }
+            return;
+        }
+
+        if (event.resolvedIntent === 'build' && !this.hasUpgrade('drag_building')) {
+            // Allow single click but prevent drag continuation
+            if (event.target.type === 'preview') {
+                this.executeBuild(event.target.previewTileId);
+            }
+            return;
+        }
+
+        if (event.resolvedIntent === 'harvest' && !this.hasUpgrade('drag_harvesting')) {
+            // Allow single click but prevent drag continuation
+            if (event.target.type === 'plant') {
+                this.executeHarvest(event.target.plantId, event.nativeEvent.timeStamp ?? performance.now());
+            }
+            return;
+        }
+
         this.activeDrag = {
             intent: event.baseIntent,
             exhausted: false
@@ -401,7 +455,10 @@ export class GameController {
             if (!planted) {
                 this.activeDrag.exhausted = true;
             } else if (!this.hasSeedsAvailable()) {
-                this.activeDrag.exhausted = true;
+                // Only exhaust if drag_planting upgrade is not purchased
+                if (!this.hasUpgrade('drag_planting')) {
+                    this.activeDrag.exhausted = true;
+                }
             }
             return;
         }
@@ -420,7 +477,10 @@ export class GameController {
             if (!built) {
                 this.activeDrag.exhausted = true;
             } else if (!this.canAffordNextSoil() || this.availableBuildPositions.size === 0) {
-                this.activeDrag.exhausted = true;
+                // Only exhaust if drag_building upgrade is not purchased
+                if (!this.hasUpgrade('drag_building')) {
+                    this.activeDrag.exhausted = true;
+                }
             }
         }
     };
@@ -451,7 +511,10 @@ export class GameController {
             if (!planted) {
                 this.feedback.triggerSoilShake(event.target.tile.id);
             } else if (!this.hasSeedsAvailable() && this.activeDrag) {
-                this.activeDrag.exhausted = true;
+                // Only exhaust if drag_planting upgrade is not purchased
+                if (!this.hasUpgrade('drag_planting')) {
+                    this.activeDrag.exhausted = true;
+                }
             }
             return;
         }
@@ -468,7 +531,10 @@ export class GameController {
         if (event.resolvedIntent === 'build' && event.target.type === 'preview') {
             const built = this.executeBuild(event.target.previewTileId);
             if (!built && this.activeDrag) {
-                this.activeDrag.exhausted = true;
+                // Only exhaust if drag_building upgrade is not purchased
+                if (!this.hasUpgrade('drag_building')) {
+                    this.activeDrag.exhausted = true;
+                }
             }
             return;
         }
@@ -696,6 +762,12 @@ export class GameController {
             return;
         }
 
+        // Prevent switching to water mode if upgrade not purchased
+        if (mode === 'water' && !this.hasUpgrade('water_plants')) {
+            this.ui.showModeMessage('Purchase Water Plants upgrade to unlock watering', true);
+            return;
+        }
+
         const previousMode = this.currentMode;
         this.currentMode = mode;
 
@@ -772,6 +844,12 @@ export class GameController {
     };
 
     private toggleWaterMode(): void {
+        // Check if water_plants upgrade is purchased
+        if (!this.hasUpgrade('water_plants')) {
+            this.ui.showModeMessage('Purchase Water Plants upgrade to unlock watering', true);
+            return;
+        }
+
         if (this.currentMode === 'water') {
             const fallbacks: Exclude<ActionMode, 'water'>[] = [
                 this.previousPrimaryMode,
@@ -801,6 +879,23 @@ export class GameController {
         this.previousPrimaryMode = this.currentMode as Exclude<ActionMode, 'water'>;
 
         this.ui.requestModeChange('water');
+    }
+
+    private updateWaterCapacity(): void {
+        this.waterStatus.capacity = this.getWaterCapacity();
+        // Clamp current level to new capacity if it exceeds it
+        if (this.waterStatus.level > this.waterStatus.capacity) {
+            this.waterStatus.level = this.waterStatus.capacity;
+        }
+        this.syncWaterStatus();
+    }
+
+    private updateWaterAOE(): void {
+        this.waterRadiusWorld = this.getWaterAOE() * TILE_SPACING;
+    }
+
+    private updateWaterUnlockStatus(): void {
+        this.ui.setWaterUnlocked(this.hasUpgrade('water_plants'));
     }
 
     private syncWaterStatus(force = false): void {
@@ -1001,7 +1096,11 @@ export class GameController {
                 nextState = this.hasSeedsAvailable() ? 'plant' : 'plant-disabled';
             }
         } else if (this.currentMode === 'water') {
-            nextState = this.waterStatus.available ? 'water' : 'water-disabled';
+            if (!this.hasUpgrade('water_plants')) {
+                nextState = 'water-disabled';
+            } else {
+                nextState = this.waterStatus.available ? 'water' : 'water-disabled';
+            }
         }
 
         this.ui.setCursorState(nextState);
@@ -1130,7 +1229,10 @@ export class GameController {
     }
 
     private applyWaterAtTarget(amount: number, timestamp: number, position: Vector3): void {
-        this.plantManager.applyWaterInRadius(position, this.waterRadiusWorld, amount, timestamp);
+        // Apply water speed multiplier to the amount
+        const speedMultiplier = this.getWaterSpeedMultiplier();
+        const effectiveAmount = amount * speedMultiplier;
+        this.plantManager.applyWaterInRadius(position, this.waterRadiusWorld, effectiveAmount, timestamp);
     }
 
     private beginWatering(pointerId: number, plantId: string, timestamp: number): void {
@@ -1195,6 +1297,47 @@ export class GameController {
         this.upgradesPanel.setVisible(!isVisible);
     }
 
+    // Upgrade helper functions
+    private getUpgradeLevel(upgradeId: string): number {
+        return this.gameState.upgrades[upgradeId] ?? 0;
+    }
+
+    private hasUpgrade(upgradeId: string): boolean {
+        return this.getUpgradeLevel(upgradeId) > 0;
+    }
+
+    private getWaterCapacity(): number {
+        const baseCapacity = WATER_RESERVOIR_CAPACITY;
+        const level = this.getUpgradeLevel('water_capacity');
+        const definition = UPGRADE_DEFINITIONS.find((def) => def.upgradeId === 'water_capacity');
+        if (!definition) {
+            return baseCapacity;
+        }
+        // Formula: baseCapacity * (1 + level * effectPerLevel)
+        return baseCapacity * (1 + level * definition.effectPerLevel);
+    }
+
+    private getWaterAOE(): number {
+        const baseRadius = WATER_APPLICATION_RADIUS_TILES;
+        const level = this.getUpgradeLevel('water_aoe');
+        const definition = UPGRADE_DEFINITIONS.find((def) => def.upgradeId === 'water_aoe');
+        if (!definition) {
+            return baseRadius;
+        }
+        // Formula: baseRadius + (level * effectPerLevel)
+        return baseRadius + (level * definition.effectPerLevel);
+    }
+
+    private getWaterSpeedMultiplier(): number {
+        const level = this.getUpgradeLevel('water_speed');
+        const definition = UPGRADE_DEFINITIONS.find((def) => def.upgradeId === 'water_speed');
+        if (!definition) {
+            return 1.0;
+        }
+        // Formula: effectPerLevel ^ level (0.9^level means 10% faster per level)
+        return Math.pow(definition.effectPerLevel, level);
+    }
+
     private handleUpgradePurchase(upgradeId: string): void {
         const definition = UPGRADE_DEFINITIONS.find((def) => def.upgradeId === upgradeId);
         if (!definition) {
@@ -1202,6 +1345,13 @@ export class GameController {
         }
 
         const currentLevel = this.gameState.upgrades[upgradeId] ?? 0;
+
+        // Bulk upgrades (drag_*) are unlock-only and max at level 1
+        const isUnlockUpgrade = upgradeId === 'drag_planting' || upgradeId === 'drag_building' || upgradeId === 'drag_harvesting' || upgradeId === 'water_plants';
+        if (isUnlockUpgrade && currentLevel >= 1) {
+            return; // Already unlocked, can't purchase again
+        }
+
         const cost = calculateUpgradeCost(definition.baseCost, definition.costScale, currentLevel);
 
         if (this.gameState.inventory.fruit < cost) {
@@ -1210,6 +1360,15 @@ export class GameController {
 
         this.gameState.inventory.fruit -= cost;
         this.gameState.upgrades[upgradeId] = currentLevel + 1;
+
+        // Update water system if relevant upgrades were purchased
+        if (upgradeId === 'water_capacity') {
+            this.updateWaterCapacity();
+        } else if (upgradeId === 'water_aoe') {
+            this.updateWaterAOE();
+        } else if (upgradeId === 'water_plants') {
+            this.updateWaterUnlockStatus();
+        }
 
         this.updateInventoryUI();
     }

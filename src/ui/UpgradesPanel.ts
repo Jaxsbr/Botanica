@@ -311,7 +311,7 @@ export class UpgradesPanel {
     private rebuildCards(): void {
         // Create tree structure: define parent-child relationships
         const treeStructure: Record<string, string[]> = {
-            'drag_planting': ['drag_building', 'drag_harvesting'],
+            'water_plants': ['drag_planting', 'drag_building', 'drag_harvesting'],
             'drag_harvesting': ['water_capacity', 'water_speed', 'water_aoe']
         };
 
@@ -319,8 +319,13 @@ export class UpgradesPanel {
         const cardMap = new Map<string, UpgradeCard>();
         this.cards = this.upgradeDefinitions.map((def) => {
             const level = this.upgradeLevels[def.upgradeId] ?? 0;
-            const cost = calculateUpgradeCost(def.baseCost, def.costScale, level);
-            const canAfford = this.currentFruit >= cost;
+
+            // Bulk upgrades (drag_*) and water_plants are unlock-only and max at level 1
+            const isUnlockUpgrade = def.upgradeId === 'drag_planting' || def.upgradeId === 'drag_building' || def.upgradeId === 'drag_harvesting' || def.upgradeId === 'water_plants';
+            const isMaxed = isUnlockUpgrade && level >= 1;
+
+            const cost = isMaxed ? 0 : calculateUpgradeCost(def.baseCost, def.costScale, level);
+            const canAfford = isMaxed ? false : this.currentFruit >= cost;
 
             const card: UpgradeCard = {
                 definition: def,
@@ -730,20 +735,24 @@ export class UpgradesPanel {
         drawRoundedRect(ctx, { x: 0, y: 0, width: rect.width, height: rect.height }, 20);
         ctx.stroke();
 
-        // Level in top left corner
-        const levelText = `Level ${card.currentLevel}`;
+        // Level in top left corner (or "Unlocked" for unlock upgrades)
+        const isUnlockUpgrade = card.definition.upgradeId === 'drag_planting' || card.definition.upgradeId === 'drag_building' || card.definition.upgradeId === 'drag_harvesting' || card.definition.upgradeId === 'water_plants';
+        const isMaxed = isUnlockUpgrade && card.currentLevel >= 1;
+        const levelText = isMaxed ? 'Unlocked' : `Level ${card.currentLevel}`;
         ctx.font = `700 16px ${FONT_FAMILY}`;
         ctx.fillStyle = 'rgba(200, 255, 220, 0.95)';
         ctx.textBaseline = 'top';
         ctx.textAlign = 'left';
         ctx.fillText(levelText, CARD_PADDING, CARD_PADDING);
 
-        // Cost in top right corner (same font size as level)
-        const costText = `${card.cost} 🍓`;
-        ctx.font = `700 16px ${FONT_FAMILY}`;
-        ctx.fillStyle = card.canAfford ? 'rgba(200, 255, 220, 0.95)' : 'rgba(150, 150, 150, 0.8)';
-        ctx.textAlign = 'right';
-        ctx.fillText(costText, rect.width - CARD_PADDING, CARD_PADDING);
+        // Cost in top right corner (same font size as level) - hide for maxed unlock upgrades
+        if (!isMaxed) {
+            const costText = `${card.cost} 🍓`;
+            ctx.font = `700 16px ${FONT_FAMILY}`;
+            ctx.fillStyle = card.canAfford ? 'rgba(200, 255, 220, 0.95)' : 'rgba(150, 150, 150, 0.8)';
+            ctx.textAlign = 'right';
+            ctx.fillText(costText, rect.width - CARD_PADDING, CARD_PADDING);
+        }
 
         // Icon below level (centered)
         const iconSize = 72;

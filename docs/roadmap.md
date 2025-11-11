@@ -161,9 +161,28 @@ Later features that can build on this foundation:
 
 ---
 
+## 📋 Future Work Log
+
+Items logged for future implementation:
+
+### Gameplay Systems
+- **Make seeds unlimited** - Remove seed scarcity, seeds become infinite resource
+- **Add seed upgrade** - New seed types that yield more/different fruit
+- **Balance watering upgrades** - Review and adjust water capacity, speed, and AOE upgrade values
+
+### UI Improvements
+- **Render fruit count above modes** - Move fruit counter to top of screen, above action mode buttons
+- **Drop info bar** - Remove or redesign the current info bar layout
+
+### Automation Upgrades
+- **Auto watering upgrade** - 3 levels that increase automatic watering processing speed
+- **Auto harvesting upgrade** - 3 levels that increase automatic harvesting processing speed
+
+---
+
 > **Guiding Rule:**
 > Every new system should begin as an active player action and evolve toward convenience, efficiency, or automation through upgrades.
-> Every upgrade should make the player’s *time investment feel more powerful*.
+> Every upgrade should make the player's *time investment feel more powerful*.
 
 ```
 
@@ -177,9 +196,9 @@ All deliverables have been implemented and are functional.
 ### FEATURE 2: Upgrades System - IN PROGRESS
 - ✅ UI & Data Setup - Complete
 - ✅ Core Upgrade Logic (purchase system) - Complete
-- ✅ Upgrade Definitions - Complete (6 upgrades defined)
+- ✅ Upgrade Definitions - Complete (7 upgrades defined: water_plants, drag_planting, drag_building, drag_harvesting, water_capacity, water_speed, water_aoe)
 - ✅ Scaling & Progression - Complete
+- ✅ Gameplay system integration - Complete (all upgrades now affect gameplay)
 - ⏳ Persistent storage - Pending
-- ⏳ Gameplay system integration - Pending
 
 ---
